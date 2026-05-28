@@ -1,10 +1,9 @@
 {
   "name": "42ndmirror",
-  "version": "0.1.0",
-  "private": true,
+  "version": "0.2.0",
   "type": "module",
+  "private": true,
   "scripts": {
-    "start": "python3 -m http.server 8080",
-    "smoke": "node ./test-smoke.mjs"
+    "test": "node test-smoke.mjs"
   }
 }

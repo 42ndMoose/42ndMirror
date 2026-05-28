@@ -1,723 +1,887 @@
-export const AXIS_CONVENTION = Object.freeze({
-  x: 'positive = Practicality, negative = Empathy',
-  y: 'positive = stable reasoning, negative = unstable reasoning',
-  z: 'positive = Wisdom, negative = Knowledge',
+export const AXIS_CONVENTION = {
+  x: {
+    positive: 'empathy',
+    negative: 'practicality',
+    note: '+x follows the uploaded visualizer: empathy is positive, practicality is negative.'
+  },
+  y: {
+    positive: 'positive epistemic stability',
+    negative: 'negative epistemic stability',
+    note: '+y means coherent, reality-contacting, self-corrective, and non-sealed.'
+  },
+  z: {
+    positive: 'wisdom',
+    negative: 'knowledge',
+    note: '+z follows the uploaded visualizer: wisdom is positive, knowledge is negative.'
+  },
   surface: '|x| + |y| + |z| = 1'
-});
+};
 
-export const MODES = Object.freeze({
+export const GATES = {
+  G1_counter_consideration: 'counter-consideration',
+  G2_non_strawman: 'non-strawman',
+  G3_self_correction: 'self-correction',
+  G4_contradiction_handling: 'contradiction handling',
+  G5_reality_contact: 'reality contact',
+  G6_non_self_sealing: 'non-self-sealing'
+};
+
+export const GATE_WEIGHTS = {
+  G1_counter_consideration: 0.8,
+  G2_non_strawman: 1.0,
+  G3_self_correction: 1.1,
+  G4_contradiction_handling: 1.2,
+  G5_reality_contact: 1.25,
+  G6_non_self_sealing: 1.1
+};
+
+export const MODES = {
   fast: {
     id: 'fast',
     name: 'Fast mode',
-    description: 'A short reasoning-shape check. Light enough for a break, still serious enough to be useful.',
-    maxBaseCards: 8,
-    maxFollowUps: 3,
-    readingLevel: 'normal'
+    description: 'Short lunch-break pass. Uses balanced cards and a few adaptive checks.',
+    readingLevel: 'normal',
+    maxBaseCards: 9,
+    maxFollowUps: 2
   },
   adhd: {
     id: 'adhd',
     name: 'ADHD mode',
-    description: 'Same engine as Fast mode, but the words are shorter and the choices are easier to hold in your head.',
-    maxBaseCards: 8,
-    maxFollowUps: 3,
-    readingLevel: 'simple'
+    description: 'Same math as Fast mode, but the wording is shorter and plainer.',
+    readingLevel: 'simple',
+    maxBaseCards: 9,
+    maxFollowUps: 2
   },
   serious: {
     id: 'serious',
     name: 'Serious mode',
-    description: 'More checks, more follow-ups, and better signal quality. Still not a long personality test.',
-    maxBaseCards: 12,
-    maxFollowUps: 5,
-    readingLevel: 'normal'
+    description: 'Longer pass. More pressure checks, stronger signal quality, still deterministic.',
+    readingLevel: 'normal',
+    maxBaseCards: 14,
+    maxFollowUps: 4
   }
-});
+};
 
-export const SCOPES = Object.freeze([
+export const SCOPES = [
   {
-    id: 'belief',
-    name: 'A belief I hold',
-    simpleName: 'Something I believe',
-    description: 'A claim, opinion, or worldview fragment you want to check.'
+    id: 'claim',
+    name: 'Claim or belief',
+    simpleName: 'Something I think',
+    description: 'A view, opinion, take, or conclusion.'
   },
   {
     id: 'decision',
-    name: 'A decision I am making',
-    simpleName: 'A choice I need to make',
-    description: 'A practical choice where tradeoffs matter.'
+    name: 'Decision',
+    simpleName: 'A choice',
+    description: 'Something someone should do or not do.'
   },
   {
     id: 'reaction',
-    name: 'A reaction I had',
-    simpleName: 'How I reacted',
-    description: 'A moment where your response may reveal your reasoning shape.'
+    name: 'Reaction',
+    simpleName: 'A reaction',
+    description: 'A response, feeling, argument, or impulse after pressure.'
   },
   {
     id: 'argument',
-    name: 'Someone else’s argument',
-    simpleName: 'What someone said',
-    description: 'Your interpretation of visible reasoning, not their inner mind.'
+    name: 'Argument',
+    simpleName: 'An argument',
+    description: 'A case someone is making, whether yours or someone else’s.'
   },
   {
-    id: 'policy',
-    name: 'A public claim or policy',
-    simpleName: 'A rule or public idea',
-    description: 'A claim about society, systems, governance, institutions, or consequences.'
+    id: 'character',
+    name: 'Character or person',
+    simpleName: 'A person/character',
+    description: 'A visible pattern in a person, public figure, or fictional character.'
   },
   {
-    id: 'conflict',
-    name: 'A conflict between people',
-    simpleName: 'People disagreeing',
-    description: 'A dispute where motives, facts, consequences, and fairness may collide.'
+    id: 'comparison',
+    name: 'Comparison',
+    simpleName: 'Two sides',
+    description: 'Two people, characters, views, strategies, or sides.'
   }
-]);
+];
 
-const gates = Object.freeze({
-  counter_consideration: 'Counter-consideration',
-  non_strawman: 'Non-strawman',
-  self_correction: 'Self-correction',
-  contradiction_handling: 'Contradiction handling',
-  reality_contact: 'Reality contact',
-  non_self_sealing: 'Non-self-sealing'
-});
+const C = (main, sub) => ({ main, sub });
+const fx = (effects = {}) => effects;
 
-export const GATES = gates;
-
-export const BASE_CARDS = Object.freeze([
+export const BASE_CARDS = [
   {
-    id: 'tradeoff_ep_01',
-    kind: 'base',
+    id: 'scope_distance_01',
     normal: {
-      kicker: 'Axis check',
-      title: 'When judging this scope, which pressure matters more?',
-      help: 'Pick the answer closest to your actual reasoning, not the answer that sounds nicest.'
+      kicker: 'Referent check',
+      title: 'What are you trying to plot?',
+      help: 'Pick the closest target. This keeps the result from pretending to judge more than your scope supports.'
     },
     simple: {
-      kicker: 'Big choice',
-      title: 'What matters more here?',
-      help: 'Pick what your brain actually uses.'
+      kicker: 'What is this about?',
+      title: 'What are we scoring?',
+      help: 'Pick the closest one. This keeps the result fair.'
     },
     answers: [
       {
-        id: 'human_cost_first',
-        normal: { main: 'Human impact first', sub: 'Fairness, harm, emotional cost, and how people are affected matter most here.' },
-        simple: { main: 'People first', sub: 'How this affects people matters most.' },
-        effects: { empathy: 3, gates: { reality_contact: 0.4 } }
+        id: 'visible_output',
+        normal: C('The visible output.', 'Words, actions, choices, or argument structure. I am not claiming to read the inner soul.'),
+        simple: C('What can be seen.', 'I am judging words or actions, not someone’s hidden mind.'),
+        effects: fx({
+          wisdom: 0.35,
+          knowledge: 0.25,
+          gates: { G5_reality_contact: 0.75, G6_non_self_sealing: 0.35 },
+          quality: { high_signal: 1 },
+          coverage: { wisdom: 1, knowledge: 1 }
+        })
       },
       {
-        id: 'results_first',
-        normal: { main: 'Results first', sub: 'What works, what can be enforced, and what produces results matter most here.' },
-        simple: { main: 'Results first', sub: 'What works matters most.' },
-        effects: { practicality: 3, gates: { reality_contact: 0.4 } }
+        id: 'single_moment',
+        normal: C('One moment or one example.', 'This can still be useful, but the result should stay narrow.'),
+        simple: C('One example.', 'Useful, but small sample.'),
+        effects: fx({
+          knowledge: 0.3,
+          gates: { G5_reality_contact: 0.45 },
+          quality: { narrow_sample: 1, provisional_sample: 1 },
+          coverage: { knowledge: 1 }
+        })
       },
       {
-        id: 'depends_on_costs',
-        normal: { main: 'The answer depends on the cost tradeoff', sub: 'I need both human impact and workable consequences before leaning hard.' },
-        simple: { main: 'I need both', sub: 'People matter, but results matter too.' },
-        effects: { empathy: 1.5, practicality: 1.5, gates: { contradiction_handling: 0.7, reality_contact: 0.5 } }
+        id: 'repeated_pattern',
+        normal: C('A repeated pattern.', 'Several moments point in the same direction, not just one dramatic case.'),
+        simple: C('A pattern.', 'More than one example points the same way.'),
+        effects: fx({
+          practicality: 0.25,
+          wisdom: 0.35,
+          knowledge: 0.25,
+          gates: { G5_reality_contact: 0.65, G4_contradiction_handling: 0.35 },
+          quality: { high_signal: 1 },
+          coverage: { practicality: 1, wisdom: 1, knowledge: 1 }
+        }),
+        followUps: ['pattern_strength_followup']
       },
       {
-        id: 'mood_pick_ep',
-        normal: { main: 'I am mostly picking by mood right now', sub: 'I do not have a clear reason yet.' },
-        simple: { main: 'I am guessing', sub: 'I do not really know yet.' },
-        effects: { gates: { reality_contact: -0.8, self_correction: 0.2 }, quality: { uncertainty: 1 } },
-        followUps: ['unclear_reason_followup']
+        id: 'taste_or_play',
+        normal: C('A taste read or thought experiment.', 'I am mostly exploring, comparing, or playing with the idea.'),
+        simple: C('Just playing with it.', 'This is more “what if?” than serious judgement.'),
+        effects: fx({
+          empathy: 0.1,
+          wisdom: 0.1,
+          quality: { sandbox_sample: 2, playful_sample: 1, low_signal: 1 },
+          coverage: { empathy: 0.25, wisdom: 0.25 }
+        }),
+        followUps: ['signal_intent_followup']
       }
     ]
   },
   {
-    id: 'tradeoff_wk_01',
-    kind: 'base',
+    id: 'primary_lens_01',
     normal: {
-      kicker: 'Axis check',
-      title: 'What are you relying on more?',
-      help: 'This separates proof-heavy reasoning from context-heavy reasoning.'
+      kicker: 'Main lens',
+      title: 'Which lens gives the cleanest first read?',
+      help: 'All four are legitimate. The card is not asking which one is morally better.'
     },
     simple: {
-      kicker: 'Big choice',
-      title: 'What are you using more?',
-      help: 'Facts, or big-picture judgment?'
+      kicker: 'Main lens',
+      title: 'What should we look at first?',
+      help: 'All choices can make sense. Pick the first lens.'
     },
     answers: [
       {
-        id: 'evidence_accuracy',
-        normal: { main: 'Facts and accuracy', sub: 'Evidence, proof, definitions, credentials, records, or technical correctness carry the load.' },
-        simple: { main: 'Facts', sub: 'Proof, records, numbers, or exact details.' },
-        effects: { knowledge: 3, gates: { reality_contact: 0.6 } }
+        id: 'person_impact',
+        normal: C('Person-impact lens.', 'Start with harm, pressure, trust, dignity, or what the choice does to people.'),
+        simple: C('People first.', 'Start with who gets helped or hurt.'),
+        effects: fx({ empathy: 1.0, wisdom: 0.15, gates: { G5_reality_contact: 0.2 }, coverage: { empathy: 1, wisdom: 0.35 } })
       },
       {
-        id: 'context_limits',
-        normal: { main: 'Context and limits', sub: 'Patterns, long-term effects, missing variables, and the limits of raw facts carry the load.' },
-        simple: { main: 'Big picture', sub: 'Patterns, context, and what facts can miss.' },
-        effects: { wisdom: 3, gates: { contradiction_handling: 0.5 } }
+        id: 'constraint_lens',
+        normal: C('Constraint lens.', 'Start with incentives, enforcement, cost, limits, and what can actually work.'),
+        simple: C('What works first.', 'Start with limits, cost, and what can actually be done.'),
+        effects: fx({ practicality: 1.0, knowledge: 0.15, gates: { G5_reality_contact: 0.2 }, coverage: { practicality: 1, knowledge: 0.35 } })
       },
       {
-        id: 'both_fact_context',
-        normal: { main: 'Facts first, context second', sub: 'I need facts, but I also check whether the facts are being used in the right frame.' },
-        simple: { main: 'Facts plus big picture', sub: 'I want proof, then I ask what it means.' },
-        effects: { knowledge: 1.8, wisdom: 1.8, gates: { reality_contact: 0.5, contradiction_handling: 0.5 } }
+        id: 'evidence_lens',
+        normal: C('Evidence lens.', 'Start with facts, sequence, proof, definitions, and what is actually known.'),
+        simple: C('Facts first.', 'Start with what we know and can prove.'),
+        effects: fx({ knowledge: 1.0, practicality: 0.15, gates: { G5_reality_contact: 0.3 }, coverage: { knowledge: 1, practicality: 0.35 } })
       },
       {
-        id: 'already_know_wk',
-        normal: { main: 'I already know the shape of it', sub: 'The details are secondary because the pattern is obvious to me.' },
-        simple: { main: 'I already know', sub: 'The details do not matter much.' },
-        effects: { wisdom: 0.8, gates: { reality_contact: -0.8, counter_consideration: -0.6 } },
-        followUps: ['pattern_confidence_followup']
+        id: 'context_lens',
+        normal: C('Context lens.', 'Start with proportion, situation, incentives, limits, and second-order effects.'),
+        simple: C('Big picture first.', 'Start with context and what might happen next.'),
+        effects: fx({ wisdom: 1.0, empathy: 0.15, gates: { G4_contradiction_handling: 0.25 }, coverage: { wisdom: 1, empathy: 0.35 } })
       }
     ]
   },
   {
-    id: 'objection_01',
-    kind: 'base',
+    id: 'protect_first_01',
     normal: {
-      kicker: 'Stability gate',
-      title: 'What do you do with the strongest objection?',
-      help: 'This checks whether the scope can survive pressure without becoming defensive.'
+      kicker: 'Value under pressure',
+      title: 'When good values clash, what do you protect first?',
+      help: 'This measures orientation, not virtue. A mature judgement may still emphasize one side because the situation demands it.'
     },
     simple: {
-      kicker: 'Pressure check',
-      title: 'What if someone has a good point against you?',
-      help: 'Pick what you would actually do.'
+      kicker: 'Hard choice',
+      title: 'When two good things clash, what comes first?',
+      help: 'This is about focus, not “good person vs bad person.”'
     },
     answers: [
-      {
-        id: 'name_strong_objection',
-        normal: { main: 'I can name it clearly', sub: 'I can state the best objection and explain why it matters.' },
-        simple: { main: 'I can name it', sub: 'I can say the best point against me.' },
-        effects: { wisdom: 1.2, gates: { counter_consideration: 1.2, non_strawman: 0.5, contradiction_handling: 0.4 } }
-      },
-      {
-        id: 'objection_misses_point',
-        normal: { main: 'Most objections miss the point', sub: 'The common objections usually fail because they attack a weaker version of the claim.' },
-        simple: { main: 'They miss the point', sub: 'Most people argue against the wrong thing.' },
-        effects: { knowledge: 0.8, gates: { counter_consideration: -0.2, non_strawman: -0.4 } },
-        followUps: ['objection_quality_followup']
-      },
-      {
-        id: 'need_to_hear_objection',
-        normal: { main: 'I need to hear one first', sub: 'I do not know the strongest objection yet, but I am open to testing it.' },
-        simple: { main: 'I need to hear it first', sub: 'I do not know the best attack yet.' },
-        effects: { gates: { counter_consideration: 0.3, self_correction: 0.4 }, quality: { incomplete_signal: 1 } }
-      },
-      {
-        id: 'objections_are_bad_faith',
-        normal: { main: 'The objections are usually bad-faith', sub: 'People mostly object because they do not want the conclusion to be true.' },
-        simple: { main: 'People just do not like it', sub: 'They argue because they hate the answer.' },
-        effects: { gates: { counter_consideration: -1, non_strawman: -0.8, non_self_sealing: -1 } },
-        followUps: ['bad_faith_followup']
-      }
-    ]
-  },
-  {
-    id: 'other_side_01',
-    kind: 'base',
-    normal: {
-      kicker: 'Stability gate',
-      title: 'Can you state the other side in a way they would accept?',
-      help: 'This does not mean agreeing with them. It means you can model their view accurately.'
-    },
-    simple: {
-      kicker: 'Fairness check',
-      title: 'Can you explain their side fairly?',
-      help: 'You do not have to agree. Just show you get it.'
-    },
-    answers: [
-      {
-        id: 'yes_fair_model',
-        normal: { main: 'Yes, I can state it fairly', sub: 'I can explain their actual concern without turning it into a cartoon.' },
-        simple: { main: 'Yes', sub: 'I can say their real point.' },
-        effects: { wisdom: 1.1, empathy: 0.7, gates: { non_strawman: 1.3, counter_consideration: 0.6 } }
-      },
-      {
-        id: 'somewhat_fair_model',
-        normal: { main: 'Somewhat', sub: 'I can state part of it, but I may still be missing why they believe it.' },
-        simple: { main: 'Kind of', sub: 'I get some of it.' },
-        effects: { empathy: 0.4, wisdom: 0.4, gates: { non_strawman: 0.3, self_correction: 0.3 }, quality: { incomplete_signal: 1 } }
-      },
-      {
-        id: 'view_is_obvious_bad',
-        normal: { main: 'Their view is basically just wrong', sub: 'There is not much to model because the error is obvious.' },
-        simple: { main: 'They are just wrong', sub: 'There is not much else to say.' },
-        effects: { knowledge: 0.9, gates: { non_strawman: -0.9, counter_consideration: -0.4 } },
-        followUps: ['obvious_wrong_followup']
-      },
-      {
-        id: 'not_enough_info_other',
-        normal: { main: 'I do not have enough information', sub: 'I should not pretend I know their inner reason from the outside.' },
-        simple: { main: 'I do not know yet', sub: 'I need more info.' },
-        effects: { wisdom: 0.8, gates: { non_strawman: 0.7, reality_contact: 0.5, self_correction: 0.3 } }
-      }
-    ]
-  },
-  {
-    id: 'change_mind_01',
-    kind: 'base',
-    normal: {
-      kicker: 'Stability gate',
-      title: 'What would change your mind?',
-      help: 'A stable view can usually name what would weaken it.'
-    },
-    simple: {
-      kicker: 'Change check',
-      title: 'What could change your mind?',
-      help: 'A strong brain can say what would count.'
-    },
-    answers: [
-      {
-        id: 'specific_evidence',
-        normal: { main: 'Specific evidence or reasoning', sub: 'I can name the kind of fact, result, or argument that would make me revise.' },
-        simple: { main: 'Real proof', sub: 'I know what would make me rethink.' },
-        effects: { knowledge: 0.7, gates: { self_correction: 1.3, reality_contact: 0.8, non_self_sealing: 0.6 } }
-      },
-      {
-        id: 'better_frame',
-        normal: { main: 'A better frame', sub: 'I would revise if someone showed that I am using the wrong lens or missing a bigger variable.' },
-        simple: { main: 'A better way to see it', sub: 'Maybe I am using the wrong lens.' },
-        effects: { wisdom: 1.1, gates: { self_correction: 1, contradiction_handling: 0.7 } }
-      },
-      {
-        id: 'hard_to_change',
-        normal: { main: 'It would be hard to change', sub: 'I have seen enough that ordinary counterexamples probably would not move me.' },
-        simple: { main: 'Hard to change', sub: 'I have seen enough already.' },
-        effects: { gates: { self_correction: -0.4, non_self_sealing: -0.3 } },
-        followUps: ['hard_to_change_followup']
-      },
-      {
-        id: 'nothing_realistic',
-        normal: { main: 'Nothing realistic', sub: 'At this point, disagreement mostly means the other side is missing something.' },
-        simple: { main: 'Nothing really', sub: 'I think I already know.' },
-        effects: { gates: { self_correction: -1.2, non_self_sealing: -1, counter_consideration: -0.6 } },
-        followUps: ['nothing_changes_followup']
-      }
-    ]
-  },
-  {
-    id: 'contradiction_01',
-    kind: 'base',
-    normal: {
-      kicker: 'Stability gate',
-      title: 'What if two parts of your view conflict?',
-      help: 'This checks whether the reasoning keeps accounting clean under pressure.'
-    },
-    simple: {
-      kicker: 'Mismatch check',
-      title: 'What if your idea has two parts that do not fit?',
-      help: 'What do you do with the mismatch?'
-    },
-    answers: [
-      {
-        id: 'resolve_conflict',
-        normal: { main: 'I slow down and resolve it', sub: 'I do not want the conclusion to outrun the accounting.' },
-        simple: { main: 'I stop and fix it', sub: 'The pieces need to fit.' },
-        effects: { wisdom: 0.9, gates: { contradiction_handling: 1.3, self_correction: 0.5 } }
-      },
-      {
-        id: 'keep_but_mark',
-        normal: { main: 'I keep the view but mark the weak spot', sub: 'The main point may still stand, but I should track the unresolved part.' },
-        simple: { main: 'I mark the weak part', sub: 'The idea may still work, but I should remember the problem.' },
-        effects: { wisdom: 0.5, practicality: 0.4, gates: { contradiction_handling: 0.7, reality_contact: 0.3 } }
-      },
-      {
-        id: 'main_conclusion_still',
-        normal: { main: 'I keep the main conclusion', sub: 'The conflict might be messy, but the broader pattern still points the same way.' },
-        simple: { main: 'I keep the big answer', sub: 'The small mismatch does not change much.' },
-        effects: { practicality: 0.6, gates: { contradiction_handling: -0.4, reality_contact: -0.2 } },
-        followUps: ['pattern_confidence_followup']
-      },
-      {
-        id: 'ignore_conflict',
-        normal: { main: 'I do not worry about it much', sub: 'Every view has rough edges, so I do not treat that as a big deal.' },
-        simple: { main: 'I ignore it', sub: 'Every idea has messy parts.' },
-        effects: { gates: { contradiction_handling: -1, self_correction: -0.5 }, quality: { shallow_signal: 1 } },
-        followUps: ['ignore_conflict_followup']
-      }
-    ]
-  },
-  {
-    id: 'reality_contact_01',
-    kind: 'base',
-    normal: {
-      kicker: 'Stability gate',
-      title: 'What is your view touching in the real world?',
-      help: 'A view with no contact point becomes too easy to protect.'
-    },
-    simple: {
-      kicker: 'Real-world check',
-      title: 'What makes this real?',
-      help: 'What is it based on?'
-    },
-    answers: [
-      {
-        id: 'concrete_evidence',
-        normal: { main: 'Concrete evidence', sub: 'Examples, records, results, numbers, direct observation, or testable consequences.' },
-        simple: { main: 'Real proof', sub: 'Examples, numbers, records, or things we can check.' },
-        effects: { knowledge: 1, gates: { reality_contact: 1.3 } }
-      },
-      {
-        id: 'lived_pattern',
-        normal: { main: 'Repeated pattern', sub: 'I have seen a pattern often enough that it deserves weight, even if it is not fully measured.' },
-        simple: { main: 'A pattern I keep seeing', sub: 'It happens a lot, even if I cannot prove every part.' },
-        effects: { wisdom: 0.8, gates: { reality_contact: 0.6, counter_consideration: 0.2 } },
-        followUps: ['pattern_evidence_followup']
-      },
-      {
-        id: 'intuition_only',
-        normal: { main: 'Mostly intuition', sub: 'It feels true, but I have not anchored it well yet.' },
-        simple: { main: 'Mostly a feeling', sub: 'It feels true, but I have not checked much.' },
-        effects: { gates: { reality_contact: -0.9, self_correction: 0.2 }, quality: { incomplete_signal: 1 } },
-        followUps: ['intuition_followup']
-      },
-      {
-        id: 'identity_loyalty',
-        normal: { main: 'It fits my side or identity', sub: 'The view matches the people, values, or team I trust most.' },
-        simple: { main: 'My side says this', sub: 'It fits the people I trust.' },
-        effects: { empathy: 0.5, gates: { reality_contact: -1, non_self_sealing: -0.7 } },
-        followUps: ['identity_anchor_followup']
-      }
-    ]
-  },
-  {
-    id: 'disagreement_01',
-    kind: 'base',
-    normal: {
-      kicker: 'Stability gate',
-      title: 'What does disagreement usually mean here?',
-      help: 'This checks whether the view protects itself by discrediting disagreement automatically.'
-    },
-    simple: {
-      kicker: 'Disagree check',
-      title: 'What if someone disagrees?',
-      help: 'What does that mean?'
-    },
-    answers: [
-      {
-        id: 'may_have_point',
-        normal: { main: 'They may have a real point', sub: 'Even if I disagree, I should check whether they see something I missed.' },
-        simple: { main: 'They might have a point', sub: 'Maybe they see something I missed.' },
-        effects: { empathy: 0.6, wisdom: 0.8, gates: { non_self_sealing: 1.2, counter_consideration: 0.6 } }
-      },
-      {
-        id: 'depends_who_and_why',
-        normal: { main: 'It depends who they are and why', sub: 'Some disagreement is useful. Some is noise. I need to sort it.' },
-        simple: { main: 'It depends', sub: 'Some people have good points. Some do not.' },
-        effects: { practicality: 0.5, wisdom: 0.5, gates: { non_self_sealing: 0.5, reality_contact: 0.4 } },
-        followUps: ['source_sorting_followup']
-      },
-      {
-        id: 'they_are_biased',
-        normal: { main: 'They are probably biased', sub: 'Most disagreement comes from people protecting their side or their ego.' },
-        simple: { main: 'They are probably biased', sub: 'They do not want to see it.' },
-        effects: { gates: { non_self_sealing: -0.9, non_strawman: -0.5 } },
-        followUps: ['bias_claim_followup']
-      },
-      {
-        id: 'disagreement_confirms',
-        normal: { main: 'The pushback mostly confirms it', sub: 'The fact that people react badly is part of why I think the view is right.' },
-        simple: { main: 'Their reaction proves it', sub: 'The pushback makes me more sure.' },
-        effects: { gates: { non_self_sealing: -1.3, counter_consideration: -0.7, reality_contact: -0.5 } },
-        followUps: ['reaction_confirms_followup']
-      }
-    ]
-  },
-  {
-    id: 'pressure_behavior_01',
-    kind: 'base',
-    seriousOnly: true,
-    normal: {
-      kicker: 'Pressure behavior',
-      title: 'When pressure rises, what do you protect first?',
-      help: 'This catches the difference between truth-protection, face-protection, and outcome-protection.'
-    },
-    simple: {
-      kicker: 'Hard moment',
-      title: 'When things get tense, what do you protect first?',
-      help: 'Pick the real one.'
-    },
-    answers: [
-      {
-        id: 'protect_accuracy',
-        normal: { main: 'Accuracy', sub: 'I would rather be corrected than keep a clean image.' },
-        simple: { main: 'Being correct', sub: 'I can be wrong if the truth gets better.' },
-        effects: { knowledge: 0.9, gates: { self_correction: 0.8, reality_contact: 0.5 } }
-      },
       {
         id: 'protect_people',
-        normal: { main: 'People', sub: 'I protect the human cost first, then sort out the details.' },
-        simple: { main: 'People', sub: 'I care who gets hurt first.' },
-        effects: { empathy: 1.2, gates: { reality_contact: 0.2 } }
+        normal: C('Protect people from avoidable damage.', 'Especially when systems treat people like disposable parts.'),
+        simple: C('Protect people.', 'Do not let the system crush people.'),
+        effects: fx({ empathy: 1.0, wisdom: 0.2, coverage: { empathy: 1, wisdom: 0.5 } })
       },
       {
-        id: 'protect_action',
-        normal: { main: 'Action', sub: 'I protect the decision path so the situation does not freeze.' },
-        simple: { main: 'Getting it done', sub: 'We still need to act.' },
-        effects: { practicality: 1.2, gates: { contradiction_handling: 0.2 } }
+        id: 'protect_function',
+        normal: C('Protect the working structure.', 'Especially when compassion-talk would break incentives, rules, or capacity.'),
+        simple: C('Protect what works.', 'Do not break the machine that everyone relies on.'),
+        effects: fx({ practicality: 1.0, knowledge: 0.2, coverage: { practicality: 1, knowledge: 0.5 } })
       },
       {
-        id: 'protect_image',
-        normal: { main: 'My position', sub: 'I do not want the core point weakened by attacks or side issues.' },
-        simple: { main: 'My side of it', sub: 'I do not want my point to look weak.' },
-        effects: { gates: { self_correction: -0.7, non_self_sealing: -0.5 }, quality: { self_protective_signal: 1 } },
-        followUps: ['protect_position_followup']
+        id: 'protect_truth_standard',
+        normal: C('Protect the truth standard.', 'Especially when pressure pushes people to skip evidence or redefine terms.'),
+        simple: C('Protect truth.', 'Do not bend facts just to win.'),
+        effects: fx({ knowledge: 1.0, wisdom: 0.2, gates: { G5_reality_contact: 0.35 }, coverage: { knowledge: 1, wisdom: 0.5 } })
+      },
+      {
+        id: 'protect_proportion',
+        normal: C('Protect proportion.', 'Especially when one loud fact or feeling is about to distort the whole picture.'),
+        simple: C('Protect the bigger picture.', 'Do not let one loud thing take over everything.'),
+        effects: fx({ wisdom: 1.0, practicality: 0.2, gates: { G4_contradiction_handling: 0.25 }, coverage: { wisdom: 1, practicality: 0.5 } })
       }
     ]
   },
   {
-    id: 'decision_cost_01',
-    kind: 'base',
+    id: 'challenge_response_01',
+    normal: {
+      kicker: 'Challenge behavior',
+      title: 'A serious challenge hits your view. What is the first clean move?',
+      help: 'These can all be valid in the right context. The follow-up separates discipline from reflex.'
+    },
+    simple: {
+      kicker: 'Pushback',
+      title: 'Someone challenges the view. What first?',
+      help: 'Pick what you would actually do first.'
+    },
+    answers: [
+      {
+        id: 'steelman_first',
+        normal: C('State the strongest version of the challenge.', 'Make sure you are answering the real objection, not a weaker copy.'),
+        simple: C('Make their point strong first.', 'Do not answer a fake weak version.'),
+        effects: fx({ wisdom: 0.45, gates: { G1_counter_consideration: 1.0, G2_non_strawman: 1.0 }, coverage: { wisdom: 1 } })
+      },
+      {
+        id: 'evidence_standard_first',
+        normal: C('Ask for the evidence standard.', 'What would count as proof, disproof, or a real exception?'),
+        simple: C('Ask what would prove it.', 'Set the evidence rule first.'),
+        effects: fx({ knowledge: 0.45, gates: { G5_reality_contact: 1.0, G6_non_self_sealing: 0.45 }, coverage: { knowledge: 1 } })
+      },
+      {
+        id: 'core_vs_edge_first',
+        normal: C('Separate core claim from edge case.', 'A challenge may weaken a detail without destroying the whole structure.'),
+        simple: C('Separate big point from small point.', 'Maybe only one part changes.'),
+        effects: fx({ wisdom: 0.5, practicality: 0.25, gates: { G4_contradiction_handling: 1.0, G3_self_correction: 0.5 }, coverage: { wisdom: 1, practicality: 0.5 } })
+      },
+      {
+        id: 'filter_low_quality',
+        normal: C('Filter the challenge first.', 'Not every objection deserves equal time. Bad-faith noise can waste attention.'),
+        simple: C('Check if it is even worth answering.', 'Some pushback is just noise.'),
+        effects: fx({ practicality: 0.5, wisdom: 0.25, gates: { G4_contradiction_handling: 0.15 }, quality: { needs_disambiguation: 1 }, coverage: { practicality: 1, wisdom: 0.5 } }),
+        followUps: ['challenge_filter_followup']
+      }
+    ]
+  },
+  {
+    id: 'evidence_bad_01',
+    normal: {
+      kicker: 'Bad evidence',
+      title: 'Evidence appears that hurts your preferred read. What happens next?',
+      help: 'A strong system can revise parts without instantly flipping or instantly sealing itself.'
+    },
+    simple: {
+      kicker: 'Bad evidence',
+      title: 'New facts make your side look weaker. What next?',
+      help: 'Do you update, check, split, or hold?'
+    },
+    answers: [
+      {
+        id: 'revise_conclusion',
+        normal: C('Revise the conclusion.', 'If the evidence is clean and relevant, the view should move.'),
+        simple: C('Change the answer.', 'If the facts are good, move.'),
+        effects: fx({ knowledge: 0.35, wisdom: 0.25, gates: { G3_self_correction: 1.1, G5_reality_contact: 0.75, G6_non_self_sealing: 0.55 }, coverage: { knowledge: 1, wisdom: 0.75 } })
+      },
+      {
+        id: 'revise_part',
+        normal: C('Revise only the affected part.', 'A good objection may force a narrower claim, not a total surrender.'),
+        simple: C('Change only the part that broke.', 'Do not throw away the whole thing too fast.'),
+        effects: fx({ wisdom: 0.6, knowledge: 0.25, gates: { G4_contradiction_handling: 1.0, G3_self_correction: 0.65 }, coverage: { wisdom: 1, knowledge: 0.75 } })
+      },
+      {
+        id: 'audit_evidence',
+        normal: C('Audit the evidence before moving.', 'Check source, context, definitions, and whether it actually touches the claim.'),
+        simple: C('Check the evidence first.', 'Make sure the fact really proves what people say.'),
+        effects: fx({ knowledge: 0.65, practicality: 0.25, gates: { G5_reality_contact: 0.85, G4_contradiction_handling: 0.45 }, coverage: { knowledge: 1, practicality: 0.5 } })
+      },
+      {
+        id: 'hold_pattern',
+        normal: C('Hold the larger pattern for now.', 'One bad-looking point may not outweigh a bigger structure.'),
+        simple: C('Hold the bigger pattern.', 'One bad point may not beat many other points.'),
+        effects: fx({ wisdom: 0.35, practicality: 0.15, gates: { G6_non_self_sealing: -0.15 }, quality: { needs_disambiguation: 1 }, coverage: { wisdom: 0.75, practicality: 0.35 } }),
+        followUps: ['pattern_strength_followup']
+      }
+    ]
+  },
+  {
+    id: 'opposing_side_01',
+    normal: {
+      kicker: 'Opposition model',
+      title: 'How do you model the other side at its strongest?',
+      help: 'This is where a lot of false objectivity breaks. The answer should separate motive, method, and evidence.'
+    },
+    simple: {
+      kicker: 'Other side',
+      title: 'How do you see the other side at its best?',
+      help: 'Do not pick what sounds nice. Pick what fits.'
+    },
+    answers: [
+      {
+        id: 'valid_concern_bad_solution',
+        normal: C('Valid concern, weak solution.', 'They are tracking something real, but their answer may fail.'),
+        simple: C('Good concern, bad fix.', 'They see something real, but their answer may not work.'),
+        effects: fx({ empathy: 0.35, practicality: 0.45, wisdom: 0.35, gates: { G2_non_strawman: 0.9, G4_contradiction_handling: 0.65 }, coverage: { empathy: 0.75, practicality: 0.75, wisdom: 0.75 } })
+      },
+      {
+        id: 'good_data_bad_frame',
+        normal: C('Good data, weak frame.', 'They may have real facts but poor context or proportion.'),
+        simple: C('Good facts, weak frame.', 'They may know facts but miss context.'),
+        effects: fx({ knowledge: 0.45, wisdom: 0.45, gates: { G2_non_strawman: 0.75, G4_contradiction_handling: 0.55 }, coverage: { knowledge: 0.75, wisdom: 0.75 } })
+      },
+      {
+        id: 'good_frame_bad_data',
+        normal: C('Good frame, weak data.', 'They may understand the pattern but lack enough proof.'),
+        simple: C('Good idea, weak facts.', 'They may see the shape but need better proof.'),
+        effects: fx({ wisdom: 0.55, knowledge: 0.35, gates: { G2_non_strawman: 0.75, G5_reality_contact: 0.35 }, coverage: { wisdom: 0.75, knowledge: 0.75 } })
+      },
+      {
+        id: 'mainly_bad_frame',
+        normal: C('Mainly a bad frame.', 'Their strongest version still seems to dodge the central reality.'),
+        simple: C('Mostly wrong frame.', 'Even their best version misses the main thing.'),
+        effects: fx({ practicality: 0.25, knowledge: 0.25, gates: { G1_counter_consideration: -0.25, G2_non_strawman: -0.15 }, quality: { needs_disambiguation: 1 }, coverage: { practicality: 0.5, knowledge: 0.5 } }),
+        followUps: ['opposition_dismissal_followup']
+      }
+    ]
+  },
+  {
+    id: 'failure_watch_01',
+    normal: {
+      kicker: 'Failure mode',
+      title: 'Which failure would most distort this scope?',
+      help: 'This card checks which missing dimension you are watching for.'
+    },
+    simple: {
+      kicker: 'Failure check',
+      title: 'What mistake would mess this up most?',
+      help: 'Pick the danger you are watching for.'
+    },
+    answers: [
+      {
+        id: 'harm_blindness',
+        normal: C('Harm-blindness.', 'A clever or efficient answer that stops seeing the people inside the system.'),
+        simple: C('Forgetting people.', 'The answer works but hurts people badly.'),
+        effects: fx({ empathy: 0.75, wisdom: 0.2, gates: { G4_contradiction_handling: 0.25 }, coverage: { empathy: 1, wisdom: 0.5 } })
+      },
+      {
+        id: 'constraint_blindness',
+        normal: C('Constraint-blindness.', 'A caring or ideal answer that fails when rules, cost, scale, or enforcement arrive.'),
+        simple: C('Forgetting limits.', 'The answer sounds nice but cannot work.'),
+        effects: fx({ practicality: 0.75, knowledge: 0.2, gates: { G5_reality_contact: 0.25 }, coverage: { practicality: 1, knowledge: 0.5 } })
+      },
+      {
+        id: 'context_blindness',
+        normal: C('Context-blindness.', 'A narrow answer that misses proportion, timing, incentives, or second-order effects.'),
+        simple: C('Forgetting context.', 'The answer misses the bigger situation.'),
+        effects: fx({ wisdom: 0.75, practicality: 0.2, gates: { G4_contradiction_handling: 0.25 }, coverage: { wisdom: 1, practicality: 0.5 } })
+      },
+      {
+        id: 'fact_blindness',
+        normal: C('Fact-blindness.', 'A confident answer that outruns the actual evidence.'),
+        simple: C('Forgetting facts.', 'The answer is confident but not proven.'),
+        effects: fx({ knowledge: 0.75, wisdom: 0.2, gates: { G5_reality_contact: 0.35 }, coverage: { knowledge: 1, wisdom: 0.5 } })
+      }
+    ]
+  },
+  {
+    id: 'character_judgement_01',
+    scopeIds: ['character', 'comparison'],
+    normal: {
+      kicker: 'Character/person distance',
+      title: 'When judging someone interesting, what carries the judgement?',
+      help: 'A character can be fascinating while the structure of their judgement is still objectively weaker.'
+    },
+    simple: {
+      kicker: 'Person/character check',
+      title: 'What are you judging?',
+      help: 'A cool character can still have weaker judgement.'
+    },
+    answers: [
+      {
+        id: 'method_under_pressure',
+        normal: C('Method under pressure.', 'How they reason when the situation stops rewarding performance.'),
+        simple: C('How they think under pressure.', 'What they do when things get hard.'),
+        effects: fx({ wisdom: 0.5, knowledge: 0.25, gates: { G4_contradiction_handling: 0.75, G5_reality_contact: 0.45 }, quality: { high_signal: 1 }, coverage: { wisdom: 1, knowledge: 0.5 } })
+      },
+      {
+        id: 'cost_of_method',
+        normal: C('Cost of method.', 'What their method produces, who pays for it, and whether the result survives scrutiny.'),
+        simple: C('What their method costs.', 'Who pays, and does it really work?'),
+        effects: fx({ empathy: 0.45, practicality: 0.45, wisdom: 0.25, gates: { G5_reality_contact: 0.65 }, coverage: { empathy: 0.75, practicality: 0.75, wisdom: 0.5 } })
+      },
+      {
+        id: 'rule_consistency',
+        normal: C('Rule consistency.', 'Whether their standards stay stable when the same rule hurts their side.'),
+        simple: C('Same rule both ways.', 'Do they keep the rule when it hurts them?'),
+        effects: fx({ knowledge: 0.4, wisdom: 0.35, gates: { G4_contradiction_handling: 0.75, G6_non_self_sealing: 0.5 }, coverage: { knowledge: 0.75, wisdom: 0.75 } })
+      },
+      {
+        id: 'aesthetic_pull',
+        normal: C('Aesthetic pull.', 'They are compelling, intense, brilliant, funny, or satisfying to watch.'),
+        simple: C('They are just cool.', 'They feel fun, smart, intense, or satisfying.'),
+        effects: fx({ empathy: 0.15, wisdom: 0.05, quality: { taste_sample: 2, low_signal: 1, scope_confusion: 1 }, coverage: { empathy: 0.25 } }),
+        followUps: ['fan_distance_followup']
+      }
+    ]
+  },
+  {
+    id: 'comparison_ground_01',
+    scopeIds: ['comparison'],
+    normal: {
+      kicker: 'Comparison ground',
+      title: 'For the comparison, what makes one side objectively stronger?',
+      help: 'The point is not which side is more likable. It is what standard survives pressure.'
+    },
+    simple: {
+      kicker: 'Two-side check',
+      title: 'What makes one side stronger?',
+      help: 'Not who is cooler. What standard survives?'
+    },
+    answers: [
+      {
+        id: 'better_reality_tracking',
+        normal: C('Better reality tracking.', 'One side predicts, explains, or accounts for the facts more cleanly.'),
+        simple: C('Tracks reality better.', 'It explains the facts better.'),
+        effects: fx({ knowledge: 0.55, wisdom: 0.3, gates: { G5_reality_contact: 0.95 }, coverage: { knowledge: 1, wisdom: 0.5 } })
+      },
+      {
+        id: 'better_tradeoff_accounting',
+        normal: C('Better tradeoff accounting.', 'One side counts costs, incentives, people, and second-order effects more completely.'),
+        simple: C('Counts tradeoffs better.', 'It counts cost, people, limits, and consequences.'),
+        effects: fx({ practicality: 0.4, empathy: 0.35, wisdom: 0.35, gates: { G4_contradiction_handling: 0.8 }, coverage: { practicality: 0.75, empathy: 0.75, wisdom: 0.75 } })
+      },
+      {
+        id: 'better_revision_behavior',
+        normal: C('Better revision behavior.', 'One side can update without pretending the old version was perfect.'),
+        simple: C('Updates better.', 'It can change without pretending nothing changed.'),
+        effects: fx({ wisdom: 0.45, knowledge: 0.25, gates: { G3_self_correction: 0.95, G6_non_self_sealing: 0.65 }, coverage: { wisdom: 0.75, knowledge: 0.5 } })
+      },
+      {
+        id: 'better_personal_pull',
+        normal: C('Better personal pull.', 'One side is more interesting, relatable, stylish, or emotionally satisfying.'),
+        simple: C('Feels better to me.', 'It is more fun, cool, or satisfying.'),
+        effects: fx({ empathy: 0.2, quality: { taste_sample: 2, low_signal: 1, scope_confusion: 1 }, coverage: { empathy: 0.25 } }),
+        followUps: ['fan_distance_followup']
+      }
+    ]
+  },
+  {
+    id: 'evidence_breadth_01',
+    normal: {
+      kicker: 'Evidence breadth',
+      title: 'How broad is the support behind this plot?',
+      help: 'This affects confidence and guards against overclaiming.'
+    },
+    simple: {
+      kicker: 'Proof size',
+      title: 'How much support do you have?',
+      help: 'This changes how strong the result should be treated.'
+    },
+    answers: [
+      {
+        id: 'thin_support',
+        normal: C('Thin but real support.', 'Enough for a rough plot, not enough for a strong claim.'),
+        simple: C('A little support.', 'Good enough for rough, not strong.'),
+        effects: fx({ knowledge: 0.15, gates: { G5_reality_contact: 0.2 }, quality: { provisional_sample: 1, incomplete_signal: 1 }, coverage: { knowledge: 0.25 } })
+      },
+      {
+        id: 'medium_support',
+        normal: C('Moderate support.', 'Several reasons or examples, but some gaps remain.'),
+        simple: C('Some support.', 'Several reasons, still gaps.'),
+        effects: fx({ knowledge: 0.3, wisdom: 0.2, gates: { G5_reality_contact: 0.45, G4_contradiction_handling: 0.25 }, quality: { high_signal: 1 }, coverage: { knowledge: 0.5, wisdom: 0.35 } })
+      },
+      {
+        id: 'strong_support',
+        normal: C('Strong support within this scope.', 'The evidence, tradeoffs, and obvious objections have been accounted for.'),
+        simple: C('Strong for this scope.', 'Facts, tradeoffs, and objections are counted.'),
+        effects: fx({ knowledge: 0.35, wisdom: 0.35, gates: { G1_counter_consideration: 0.45, G4_contradiction_handling: 0.45, G5_reality_contact: 0.65 }, quality: { high_signal: 2 }, coverage: { knowledge: 0.75, wisdom: 0.75 } })
+      },
+      {
+        id: 'not_sure_support',
+        normal: C('Not sure.', 'This is more of a first pass than a defended judgement.'),
+        simple: C('Not sure.', 'This is a first try.'),
+        effects: fx({ gates: { G3_self_correction: 0.25 }, quality: { uncertainty: 1, incomplete_signal: 1, provisional_sample: 1 } })
+      }
+    ]
+  },
+  {
+    id: 'seriousness_01',
+    normal: {
+      kicker: 'Signal check',
+      title: 'How should the final coordinate be treated?',
+      help: 'This does not shame the sample. It tells the output whether to act like a serious plot or a sandbox plot.'
+    },
+    simple: {
+      kicker: 'Signal check',
+      title: 'How real is this answer?',
+      help: 'This tells the app how seriously to treat it.'
+    },
+    answers: [
+      {
+        id: 'serious_current_read',
+        normal: C('Serious current read.', 'I answered as honestly as I could for this scope.'),
+        simple: C('Real answer.', 'I answered honestly.'),
+        effects: fx({ gates: { G6_non_self_sealing: 0.25 }, quality: { high_signal: 2 } })
+      },
+      {
+        id: 'rough_current_read',
+        normal: C('Rough current read.', 'Useful, but I would not overclaim it.'),
+        simple: C('Rough answer.', 'Useful, but not final.'),
+        effects: fx({ gates: { G3_self_correction: 0.2 }, quality: { provisional_sample: 1, uncertainty: 1 } })
+      },
+      {
+        id: 'testing_the_tool',
+        normal: C('Tool test.', 'I was checking how the app behaves more than plotting a real scope.'),
+        simple: C('Testing the app.', 'Not really scoring something.'),
+        effects: fx({ quality: { sandbox_sample: 2, low_signal: 2 } })
+      },
+      {
+        id: 'messy_or_mixed',
+        normal: C('Messy or mixed.', 'Some answers were serious, some were vibes, speed, or curiosity.'),
+        simple: C('Mixed answer.', 'Some real, some just vibes.'),
+        effects: fx({ gates: { G3_self_correction: 0.1 }, quality: { noisy_sample: 1, provisional_sample: 1, low_signal: 1 } })
+      }
+    ]
+  },
+  {
+    id: 'serious_integrated_tradeoff_01',
     seriousOnly: true,
     normal: {
-      kicker: 'Cost accounting',
-      title: 'Which cost are you most likely to undercount?',
-      help: 'A good result can expose its own blind spot.'
+      kicker: 'Integration check',
+      title: 'What would make this plot stronger without changing its basic direction?',
+      help: 'Serious mode asks whether the missing dimensions are actually being carried.'
     },
     simple: {
-      kicker: 'Blind spot',
-      title: 'What cost might you miss?',
-      help: 'What do you forget too easily?'
+      kicker: 'Integration check',
+      title: 'What would make the answer stronger?',
+      help: 'This checks what is missing.'
     },
     answers: [
       {
-        id: 'undercount_human',
-        normal: { main: 'Human cost', sub: 'I may undercount how this affects people.' },
-        simple: { main: 'People getting hurt', sub: 'I might miss that.' },
-        effects: { practicality: 0.7, empathy: 0.5, gates: { self_correction: 0.6 } }
+        id: 'add_people_cost',
+        normal: C('A cleaner accounting of human cost.', 'The method may work, but the person-impact needs sharper counting.'),
+        simple: C('Count people better.', 'The answer needs clearer human cost.'),
+        effects: fx({ empathy: 0.65, wisdom: 0.25, gates: { G4_contradiction_handling: 0.3 }, coverage: { empathy: 1, wisdom: 0.5 } })
       },
       {
-        id: 'undercount_workability',
-        normal: { main: 'Workability', sub: 'I may undercount whether this can actually work.' },
-        simple: { main: 'Whether it works', sub: 'A nice idea may fail.' },
-        effects: { empathy: 0.7, practicality: 0.5, gates: { reality_contact: 0.6 } }
+        id: 'add_workability',
+        normal: C('A cleaner accounting of workability.', 'The concern may be real, but the mechanism needs sharper counting.'),
+        simple: C('Count workability better.', 'The answer needs clearer mechanism.'),
+        effects: fx({ practicality: 0.65, knowledge: 0.25, gates: { G5_reality_contact: 0.3 }, coverage: { practicality: 1, knowledge: 0.5 } })
       },
       {
-        id: 'undercount_facts',
-        normal: { main: 'Missing facts', sub: 'I may be drawing too much from too little evidence.' },
-        simple: { main: 'Missing proof', sub: 'I may not know enough.' },
-        effects: { wisdom: 0.6, knowledge: 0.5, gates: { self_correction: 0.5, reality_contact: 0.5 } }
+        id: 'add_context',
+        normal: C('A cleaner accounting of context.', 'The facts may be real, but timing, proportion, and second effects need attention.'),
+        simple: C('Count context better.', 'The answer needs bigger-picture control.'),
+        effects: fx({ wisdom: 0.65, practicality: 0.25, gates: { G4_contradiction_handling: 0.35 }, coverage: { wisdom: 1, practicality: 0.5 } })
       },
       {
-        id: 'undercount_context',
-        normal: { main: 'Missing context', sub: 'I may have facts but still be using them inside a weak frame.' },
-        simple: { main: 'Missing big picture', sub: 'The facts may not be enough.' },
-        effects: { knowledge: 0.6, wisdom: 0.5, gates: { contradiction_handling: 0.5 } }
+        id: 'add_facts',
+        normal: C('A cleaner accounting of facts.', 'The pattern may be plausible, but evidence and definitions need tightening.'),
+        simple: C('Count facts better.', 'The answer needs stronger proof.'),
+        effects: fx({ knowledge: 0.65, wisdom: 0.25, gates: { G5_reality_contact: 0.35 }, coverage: { knowledge: 1, wisdom: 0.5 } })
       }
     ]
   },
   {
-    id: 'final_check_01',
-    kind: 'base',
+    id: 'serious_repair_01',
+    seriousOnly: true,
     normal: {
-      kicker: 'Final check',
-      title: 'How seriously should this result be treated?',
-      help: 'This does not change the axes much. It helps label the signal quality.'
+      kicker: 'Repair check',
+      title: 'If your plot turns out wrong, what is the clean repair path?',
+      help: 'This checks whether the position can repair itself instead of merely defending itself.'
     },
     simple: {
-      kicker: 'Last check',
-      title: 'How real were your answers?',
-      help: 'Be honest. This protects the result.'
+      kicker: 'Repair check',
+      title: 'If wrong, how does it get fixed?',
+      help: 'This checks if the answer can repair itself.'
     },
     answers: [
       {
-        id: 'careful_answers',
-        normal: { main: 'Careful enough', sub: 'I answered based on the actual scope.' },
-        simple: { main: 'I answered for real', sub: 'I tried.' },
-        effects: { gates: { reality_contact: 0.3 }, quality: { high_signal: 1 } }
+        id: 'change_rule',
+        normal: C('Change the rule.', 'The standard itself would need revision.'),
+        simple: C('Change the rule.', 'The standard needs fixing.'),
+        effects: fx({ wisdom: 0.35, gates: { G3_self_correction: 0.75, G6_non_self_sealing: 0.45 }, coverage: { wisdom: 0.5 } })
       },
       {
-        id: 'rough_answers',
-        normal: { main: 'Rough but usable', sub: 'Some answers were approximate, but the shape is probably still useful.' },
-        simple: { main: 'Close enough', sub: 'Not perfect, but usable.' },
-        effects: { quality: { incomplete_signal: 1 } }
+        id: 'change_data',
+        normal: C('Change the data model.', 'The evidence base or definitions would need revision.'),
+        simple: C('Change the facts model.', 'The proof or definitions need fixing.'),
+        effects: fx({ knowledge: 0.45, gates: { G3_self_correction: 0.55, G5_reality_contact: 0.55 }, coverage: { knowledge: 0.75 } })
       },
       {
-        id: 'mostly_testing_app',
-        normal: { main: 'I was mostly testing the app', sub: 'The result should be treated as weak signal.' },
-        simple: { main: 'I was just testing', sub: 'Do not take the score too seriously.' },
-        effects: { gates: { reality_contact: -0.4 }, quality: { low_signal: 2 } }
+        id: 'change_application',
+        normal: C('Change the application.', 'The principle may stand, but this case was applied badly.'),
+        simple: C('Change how it is used.', 'The idea may stand, but the case was wrong.'),
+        effects: fx({ practicality: 0.35, wisdom: 0.35, gates: { G4_contradiction_handling: 0.6, G3_self_correction: 0.45 }, coverage: { practicality: 0.5, wisdom: 0.5 } })
       },
       {
-        id: 'clicked_through',
-        normal: { main: 'I mostly clicked through', sub: 'The result should not be used as a real judgment.' },
-        simple: { main: 'I clicked around', sub: 'This result is weak.' },
-        effects: { gates: { reality_contact: -0.8, self_correction: -0.4 }, quality: { low_signal: 3, shallow_signal: 1 } }
+        id: 'not_repairable',
+        normal: C('It probably would not need repair.', 'The core is strong enough that apparent failures are mostly misreads.'),
+        simple: C('It probably does not need fixing.', 'Problems are likely misreads.'),
+        effects: fx({ practicality: 0.2, gates: { G3_self_correction: -0.55, G6_non_self_sealing: -0.65 }, quality: { sealed_signal: 1 }, coverage: { practicality: 0.25 } }),
+        followUps: ['repair_closure_followup']
       }
     ]
   }
-]);
+];
 
-export const FOLLOW_UP_CARDS = Object.freeze([
+export const FOLLOW_UP_CARDS = [
   {
-    id: 'unclear_reason_followup',
-    kind: 'followup',
+    id: 'challenge_filter_followup',
     normal: {
-      kicker: 'Clarifier',
-      title: 'Why is the reason unclear?',
-      help: 'This separates honest uncertainty from low-contact guessing.'
+      kicker: 'Filter follow-up',
+      title: 'What makes the challenge low-quality?',
+      help: 'Filtering is valid. The reason decides whether it is disciplined or sealed.'
     },
     simple: {
-      kicker: 'Quick check',
-      title: 'Why are you unsure?',
-      help: 'Pick the closest one.'
+      kicker: 'Noise check',
+      title: 'Why is the pushback low-quality?',
+      help: 'Filtering can be smart. The reason matters.'
     },
     answers: [
-      { id: 'need_more_info', normal: { main: 'I need more information', sub: 'The scope may be real, but I lack enough inputs.' }, simple: { main: 'I need more info', sub: 'I do not know enough yet.' }, effects: { gates: { self_correction: 0.6, reality_contact: 0.4 }, quality: { incomplete_signal: 1 } } },
-      { id: 'not_thinking_hard', normal: { main: 'I am not thinking hard about it', sub: 'I am giving a loose answer.' }, simple: { main: 'I am not thinking hard', sub: 'Loose answer.' }, effects: { gates: { reality_contact: -0.5 }, quality: { low_signal: 2 } } },
-      { id: 'feels_mixed', normal: { main: 'The tradeoff is genuinely mixed', sub: 'Both sides have real force in this scope.' }, simple: { main: 'It is mixed', sub: 'Both sides matter.' }, effects: { gates: { contradiction_handling: 0.8, counter_consideration: 0.4 } } }
+      {
+        id: 'misses_claim',
+        normal: C('It misses the actual claim.', 'It attacks a version I am not defending.'),
+        simple: C('It attacks the wrong point.', 'Not my real claim.'),
+        effects: fx({ wisdom: 0.25, gates: { G2_non_strawman: 0.65, G4_contradiction_handling: 0.35 }, quality: { high_signal: 1 }, coverage: { wisdom: 0.5 } })
+      },
+      {
+        id: 'no_evidence_standard',
+        normal: C('It gives no usable evidence standard.', 'There is no clear way to test what would change the claim.'),
+        simple: C('No proof rule.', 'There is no clear test.'),
+        effects: fx({ knowledge: 0.25, gates: { G5_reality_contact: 0.55, G6_non_self_sealing: 0.25 }, coverage: { knowledge: 0.5 } })
+      },
+      {
+        id: 'wrong_team',
+        normal: C('It comes from the wrong camp.', 'Their side usually frames this issue badly.'),
+        simple: C('Wrong side said it.', 'Their side usually gets this wrong.'),
+        effects: fx({ gates: { G1_counter_consideration: -0.65, G2_non_strawman: -0.5, G6_non_self_sealing: -0.75 }, quality: { sealed_signal: 1, self_protective_signal: 1 } })
+      },
+      {
+        id: 'not_worth_attention',
+        normal: C('It may not be worth attention right now.', 'Possible issue, but the scope is too small or noisy for this pass.'),
+        simple: C('Maybe later.', 'It might matter, but not in this quick pass.'),
+        effects: fx({ practicality: 0.15, gates: { G3_self_correction: 0.1 }, quality: { provisional_sample: 1, incomplete_signal: 1 } })
+      }
     ]
   },
   {
-    id: 'pattern_confidence_followup',
-    kind: 'followup',
-    normal: { kicker: 'Pattern check', title: 'What makes the pattern obvious?', help: 'Pattern recognition can be sharp, or it can become a shortcut.' },
-    simple: { kicker: 'Pattern check', title: 'Why does it feel obvious?', help: 'What makes you so sure?' },
+    id: 'pattern_strength_followup',
+    normal: {
+      kicker: 'Pattern follow-up',
+      title: 'What makes the pattern strong enough to carry weight?',
+      help: 'This separates real pattern recognition from vague certainty.'
+    },
+    simple: {
+      kicker: 'Pattern check',
+      title: 'Why does the pattern count?',
+      help: 'Pattern can be real. Show what holds it up.'
+    },
     answers: [
-      { id: 'many_examples', normal: { main: 'Many examples across time', sub: 'The pattern keeps showing up in different places.' }, simple: { main: 'Many examples', sub: 'I keep seeing it.' }, effects: { wisdom: 0.8, gates: { reality_contact: 0.7, counter_consideration: 0.2 } } },
-      { id: 'clear_mechanism', normal: { main: 'A clear mechanism', sub: 'I can explain what causes the pattern, not just point at vibes.' }, simple: { main: 'I know why it happens', sub: 'There is a cause.' }, effects: { knowledge: 0.6, wisdom: 0.6, gates: { reality_contact: 0.7, contradiction_handling: 0.5 } } },
-      { id: 'people_show_it', normal: { main: 'People reveal it when challenged', sub: 'Their reactions seem to expose the pattern.' }, simple: { main: 'People show it', sub: 'Their reaction gives it away.' }, effects: { gates: { non_self_sealing: -0.5, non_strawman: -0.3 } }, followUps: ['reaction_confirms_followup'] },
-      { id: 'cant_explain_pattern', normal: { main: 'I cannot explain it cleanly yet', sub: 'It feels obvious, but I have not made it accountable.' }, simple: { main: 'I cannot explain it yet', sub: 'It just feels clear.' }, effects: { gates: { reality_contact: -0.6, contradiction_handling: -0.3 }, quality: { incomplete_signal: 1 } } }
+      {
+        id: 'repeated_examples',
+        normal: C('Repeated concrete examples.', 'Different cases point to the same structure.'),
+        simple: C('Many clear examples.', 'Different cases point the same way.'),
+        effects: fx({ knowledge: 0.35, gates: { G5_reality_contact: 0.85 }, quality: { high_signal: 1 }, coverage: { knowledge: 0.75 } })
+      },
+      {
+        id: 'mechanism',
+        normal: C('A mechanism explains it.', 'The incentives, constraints, or causal structure make the pattern likely.'),
+        simple: C('There is a mechanism.', 'Incentives or causes explain it.'),
+        effects: fx({ practicality: 0.3, wisdom: 0.25, gates: { G4_contradiction_handling: 0.55, G5_reality_contact: 0.45 }, coverage: { practicality: 0.5, wisdom: 0.5 } })
+      },
+      {
+        id: 'trusted_cluster',
+        normal: C('Trusted people converge on it.', 'Several serious observers see the same thing.'),
+        simple: C('Trusted people agree.', 'Serious people see the same thing.'),
+        effects: fx({ knowledge: 0.15, wisdom: 0.15, gates: { G5_reality_contact: 0.1 }, quality: { incomplete_signal: 1 }, coverage: { knowledge: 0.25, wisdom: 0.25 } })
+      },
+      {
+        id: 'obvious_once_seen',
+        normal: C('It is obvious once you see it.', 'The pattern feels too clear to keep reopening.'),
+        simple: C('It is just obvious.', 'Once you see it, you see it.'),
+        effects: fx({ wisdom: 0.1, gates: { G1_counter_consideration: -0.45, G5_reality_contact: -0.35, G6_non_self_sealing: -0.55 }, quality: { sealed_signal: 1, low_signal: 1 } })
+      }
     ]
   },
   {
-    id: 'objection_quality_followup',
-    kind: 'followup',
-    normal: { kicker: 'Objection check', title: 'Why do the objections miss the point?', help: 'This checks whether you can separate weak objections from all objections.' },
-    simple: { kicker: 'Objection check', title: 'Why do they miss the point?', help: 'Pick the reason.' },
+    id: 'opposition_dismissal_followup',
+    normal: {
+      kicker: 'Dismissal follow-up',
+      title: 'Why is the other side’s best frame still weak?',
+      help: 'A negative judgement can be objective, but it needs a stable basis.'
+    },
+    simple: {
+      kicker: 'Why weak?',
+      title: 'Why is their best version still weak?',
+      help: 'A side can be wrong. The reason matters.'
+    },
     answers: [
-      { id: 'they_attack_wrong_claim', normal: { main: 'They attack the wrong claim', sub: 'I can state the stronger version they are failing to address.' }, simple: { main: 'Wrong target', sub: 'They attack a weaker version.' }, effects: { knowledge: 0.7, gates: { non_strawman: 0.6, counter_consideration: 0.4 } } },
-      { id: 'they_ignore_tradeoff', normal: { main: 'They ignore the tradeoff', sub: 'They focus on one cost and erase another.' }, simple: { main: 'They miss the tradeoff', sub: 'They see only one cost.' }, effects: { wisdom: 0.7, gates: { contradiction_handling: 0.5, counter_consideration: 0.3 } } },
-      { id: 'they_are_motivated', normal: { main: 'They are motivated against the conclusion', sub: 'Their objection mainly protects their side.' }, simple: { main: 'They do not want it true', sub: 'Their side gets protected.' }, effects: { gates: { non_self_sealing: -0.7, non_strawman: -0.4 } }, followUps: ['bad_faith_followup'] }
+      {
+        id: 'fails_prediction',
+        normal: C('It fails prediction or real-world contact.', 'Its own expectations do not survive the evidence.'),
+        simple: C('It fails reality.', 'It predicts badly or ignores facts.'),
+        effects: fx({ knowledge: 0.4, gates: { G5_reality_contact: 0.85, G2_non_strawman: 0.35 }, coverage: { knowledge: 0.75 } })
+      },
+      {
+        id: 'fails_tradeoffs',
+        normal: C('It fails tradeoff accounting.', 'It counts one value while hiding cost somewhere else.'),
+        simple: C('It hides costs.', 'It counts one good thing but ignores the cost.'),
+        effects: fx({ practicality: 0.35, wisdom: 0.3, gates: { G4_contradiction_handling: 0.65, G2_non_strawman: 0.35 }, coverage: { practicality: 0.5, wisdom: 0.5 } })
+      },
+      {
+        id: 'fails_same_rule',
+        normal: C('It fails the same-rule test.', 'The standard changes when the target changes.'),
+        simple: C('It changes rules.', 'Same rule is not used both ways.'),
+        effects: fx({ knowledge: 0.25, wisdom: 0.35, gates: { G4_contradiction_handling: 0.75, G6_non_self_sealing: 0.35 }, coverage: { knowledge: 0.5, wisdom: 0.75 } })
+      },
+      {
+        id: 'corrupt_or_stupid',
+        normal: C('Because the frame is obviously corrupt or stupid.', 'The weakness is mostly explained by the people holding it.'),
+        simple: C('Because they are stupid or corrupt.', 'The people are the explanation.'),
+        effects: fx({ gates: { G1_counter_consideration: -0.65, G2_non_strawman: -0.75, G6_non_self_sealing: -0.55 }, quality: { self_protective_signal: 1, sealed_signal: 1 } })
+      }
     ]
   },
   {
-    id: 'bad_faith_followup',
-    kind: 'followup',
-    normal: { kicker: 'Motive check', title: 'How do you know the objection is bad-faith?', help: 'Motive claims need stronger accounting than ordinary disagreement.' },
-    simple: { kicker: 'Motive check', title: 'How do you know they are not honest?', help: 'What is the proof?' },
+    id: 'fan_distance_followup',
+    normal: {
+      kicker: 'Taste follow-up',
+      title: 'Can you separate appeal from judgement?',
+      help: 'This is the Death Note problem: Light and L can both be interesting, but the plot should judge structure, not fan pull.'
+    },
+    simple: {
+      kicker: 'Coolness check',
+      title: 'Can you separate cool from correct?',
+      help: 'Someone can be cool and still reason worse.'
+    },
     answers: [
-      { id: 'record_of_misrepresenting', normal: { main: 'A record of misrepresenting', sub: 'There is a concrete pattern of them twisting the claim.' }, simple: { main: 'They keep twisting it', sub: 'There is a record.' }, effects: { knowledge: 0.8, gates: { reality_contact: 0.7, non_self_sealing: 0.2 } } },
-      { id: 'direct_incentive', normal: { main: 'A direct incentive', sub: 'They benefit from pretending not to understand.' }, simple: { main: 'They gain from it', sub: 'They have a reason to fake it.' }, effects: { practicality: 0.6, gates: { reality_contact: 0.4 } } },
-      { id: 'they_disagree_so_bad', normal: { main: 'Because no honest person would hold that view', sub: 'The disagreement itself is enough evidence for me.' }, simple: { main: 'Because no honest person would say that', sub: 'The disagreement proves it.' }, effects: { gates: { non_self_sealing: -1, non_strawman: -0.8, counter_consideration: -0.6 } } },
-      { id: 'not_sure_badfaith', normal: { main: 'I should soften that claim', sub: 'I may be reading motive too strongly.' }, simple: { main: 'Maybe I went too far', sub: 'I should not guess their motive too fast.' }, effects: { wisdom: 0.6, gates: { self_correction: 0.8, non_strawman: 0.5, non_self_sealing: 0.5 } } }
+      {
+        id: 'separate_method_from_appeal',
+        normal: C('Yes. I can like the figure and still judge the method.', 'Appeal does not decide the coordinate.'),
+        simple: C('Yes.', 'I can like them and still judge the method.'),
+        effects: fx({ wisdom: 0.35, gates: { G6_non_self_sealing: 0.6, G4_contradiction_handling: 0.35 }, quality: { high_signal: 1 }, coverage: { wisdom: 0.5 } })
+      },
+      {
+        id: 'mostly_taste',
+        normal: C('Not really. This pass is mostly taste.', 'The coordinate should be treated as weak signal.'),
+        simple: C('Mostly taste.', 'The result should be weak.'),
+        effects: fx({ quality: { taste_sample: 2, low_signal: 2, sandbox_sample: 1 } })
+      },
+      {
+        id: 'result_proves_method',
+        normal: C('Their result mostly proves the method.', 'If they keep winning, the method deserves weight.'),
+        simple: C('Winning proves a lot.', 'If they keep winning, the method counts.'),
+        effects: fx({ practicality: 0.35, knowledge: 0.15, gates: { G5_reality_contact: 0.15, G4_contradiction_handling: -0.15 }, quality: { needs_disambiguation: 1 }, coverage: { practicality: 0.5, knowledge: 0.25 } })
+      },
+      {
+        id: 'rule_proves_method',
+        normal: C('Their rule mostly proves the method.', 'The method is strong because its standard is principled.'),
+        simple: C('The rule proves a lot.', 'Their standard matters most.'),
+        effects: fx({ knowledge: 0.25, wisdom: 0.25, gates: { G4_contradiction_handling: 0.25 }, coverage: { knowledge: 0.5, wisdom: 0.5 } })
+      }
     ]
   },
   {
-    id: 'obvious_wrong_followup',
-    kind: 'followup',
-    normal: { kicker: 'Certainty check', title: 'What makes the other side obviously wrong?', help: 'This separates clean refutation from status-defense.' },
-    simple: { kicker: 'Certainty check', title: 'Why are they clearly wrong?', help: 'What makes it clear?' },
+    id: 'signal_intent_followup',
+    normal: {
+      kicker: 'Sandbox follow-up',
+      title: 'What kind of sandbox pass is this?',
+      help: 'The app can still output xyz, but the output should not pretend the signal is stronger than it is.'
+    },
+    simple: {
+      kicker: 'Play check',
+      title: 'What kind of play is this?',
+      help: 'It can still output xyz, just with a warning.'
+    },
     answers: [
-      { id: 'contradicts_record', normal: { main: 'It contradicts the record', sub: 'There are clear facts or results against it.' }, simple: { main: 'Facts go against it', sub: 'The record says no.' }, effects: { knowledge: 1, gates: { reality_contact: 0.8 } } },
-      { id: 'internal_contradiction', normal: { main: 'It contradicts itself', sub: 'The view fails by its own terms.' }, simple: { main: 'It fights itself', sub: 'Its own pieces do not fit.' }, effects: { wisdom: 0.7, knowledge: 0.5, gates: { contradiction_handling: 0.8 } } },
-      { id: 'people_who_believe_low_status', normal: { main: 'The people who believe it are not serious', sub: 'Their side is the main reason I dismiss the view.' }, simple: { main: 'Those people are not serious', sub: 'That is why I dismiss it.' }, effects: { gates: { non_strawman: -0.8, non_self_sealing: -0.7 } } },
-      { id: 'not_sure_obvious', normal: { main: 'Maybe “obvious” is too strong', sub: 'I still disagree, but I should model it better.' }, simple: { main: 'Maybe not obvious', sub: 'I should check more.' }, effects: { wisdom: 0.5, gates: { self_correction: 0.7, non_strawman: 0.5 } } }
+      {
+        id: 'exploring_real_possibility',
+        normal: C('Exploring a real possibility.', 'Not final, but not nonsense either.'),
+        simple: C('Real possibility.', 'Not final, but real enough.'),
+        effects: fx({ wisdom: 0.15, gates: { G3_self_correction: 0.25 }, quality: { provisional_sample: 1 } })
+      },
+      {
+        id: 'stress_testing_app',
+        normal: C('Stress-testing the app.', 'The coordinate should be treated as diagnostic of the app, not the scope.'),
+        simple: C('Testing the app.', 'This is about the app, not the topic.'),
+        effects: fx({ quality: { sandbox_sample: 3, low_signal: 2 } })
+      },
+      {
+        id: 'random_clicking',
+        normal: C('Mostly random or unserious.', 'The coordinate should be marked weak.'),
+        simple: C('Mostly random.', 'The result should be weak.'),
+        effects: fx({ gates: { G5_reality_contact: -0.35 }, quality: { sandbox_sample: 3, playful_sample: 2, low_signal: 3, noisy_sample: 1 } })
+      },
+      {
+        id: 'roleplay_sample',
+        normal: C('Roleplay sample.', 'I am answering as a perspective, not necessarily my own judgement.'),
+        simple: C('Roleplay.', 'I am answering as a viewpoint.'),
+        effects: fx({ wisdom: 0.1, quality: { provisional_sample: 1, scope_confusion: 1 } })
+      }
     ]
   },
   {
-    id: 'hard_to_change_followup',
-    kind: 'followup',
-    normal: { kicker: 'Revision check', title: 'Why would it be hard to change?', help: 'Some views are stable because they are well-tested. Others are sealed.' },
-    simple: { kicker: 'Change check', title: 'Why is it hard to change?', help: 'Strong proof or locked door?' },
+    id: 'repair_closure_followup',
+    normal: {
+      kicker: 'Closure follow-up',
+      title: 'What would reopen the view anyway?',
+      help: 'A view can be firm. This asks whether it is also answerable to reality.'
+    },
+    simple: {
+      kicker: 'Reopen check',
+      title: 'What would make you reopen it?',
+      help: 'Firm is fine. Sealed is different.'
+    },
     answers: [
-      { id: 'well_tested', normal: { main: 'It has been tested many ways', sub: 'Different evidence streams keep pointing the same way.' }, simple: { main: 'I tested it a lot', sub: 'Many checks point the same way.' }, effects: { knowledge: 0.7, wisdom: 0.5, gates: { reality_contact: 0.7, self_correction: 0.4 } } },
-      { id: 'core_values', normal: { main: 'It protects a core value', sub: 'Changing it would require changing what I prioritize.' }, simple: { main: 'It protects something important', sub: 'It connects to my values.' }, effects: { empathy: 0.7, gates: { self_correction: -0.2 } } },
-      { id: 'dont_trust_counter', normal: { main: 'I do not trust counter-evidence here', sub: 'Most evidence against it is likely filtered or manipulated.' }, simple: { main: 'I do not trust the other proof', sub: 'It may be fake or filtered.' }, effects: { gates: { non_self_sealing: -0.6, reality_contact: -0.4 } }, followUps: ['source_sorting_followup'] }
-    ]
-  },
-  {
-    id: 'nothing_changes_followup',
-    kind: 'followup',
-    normal: { kicker: 'Seal check', title: 'Is the view allowed to lose?', help: 'A view that cannot lose cannot be measured well.' },
-    simple: { kicker: 'Locked-door check', title: 'Can your idea lose?', help: 'Can anything beat it?' },
-    answers: [
-      { id: 'can_lose_in_principle', normal: { main: 'Yes, in principle', sub: 'I overstated it. There are extreme cases that would change it.' }, simple: { main: 'Yes, maybe', sub: 'I said it too strongly.' }, effects: { wisdom: 0.4, gates: { self_correction: 0.8, non_self_sealing: 0.6 } } },
-      { id: 'cannot_lose', normal: { main: 'No, it cannot realistically lose', sub: 'Any counterexample would probably be fake, irrelevant, or misread.' }, simple: { main: 'No', sub: 'Anything against it is probably wrong.' }, effects: { gates: { self_correction: -1.1, non_self_sealing: -1.2, reality_contact: -0.7 }, quality: { sealed_signal: 2 } } },
-      { id: 'depends_on_definition', normal: { main: 'It depends on definitions', sub: 'I may need to tighten the claim before testing it fairly.' }, simple: { main: 'I need clearer words', sub: 'The idea may be too messy.' }, effects: { knowledge: 0.4, gates: { contradiction_handling: 0.7, self_correction: 0.4 } } }
-    ]
-  },
-  {
-    id: 'ignore_conflict_followup',
-    kind: 'followup',
-    normal: { kicker: 'Conflict check', title: 'Why is the conflict safe to ignore?', help: 'Some conflicts are minor. Some expose the center of the issue.' },
-    simple: { kicker: 'Mismatch check', title: 'Why can you ignore it?', help: 'Is it small or important?' },
-    answers: [
-      { id: 'minor_edge_case', normal: { main: 'It is a minor edge case', sub: 'It affects the boundary, not the main claim.' }, simple: { main: 'It is small', sub: 'It does not change the main point.' }, effects: { practicality: 0.5, gates: { contradiction_handling: 0.3, reality_contact: 0.3 } } },
-      { id: 'will_fix_later', normal: { main: 'I should fix it later', sub: 'The result is useful, but the unresolved part should be tracked.' }, simple: { main: 'I should fix it later', sub: 'The weak part should be marked.' }, effects: { wisdom: 0.4, gates: { contradiction_handling: 0.5, self_correction: 0.4 }, quality: { incomplete_signal: 1 } } },
-      { id: 'dont_care_conflict', normal: { main: 'I do not care because the conclusion feels right', sub: 'The conflict does not matter to me.' }, simple: { main: 'I do not care', sub: 'The answer feels right anyway.' }, effects: { gates: { contradiction_handling: -0.9, reality_contact: -0.5 }, quality: { shallow_signal: 2 } } }
-    ]
-  },
-  {
-    id: 'pattern_evidence_followup',
-    kind: 'followup',
-    normal: { kicker: 'Pattern evidence', title: 'How broad is the pattern?', help: 'One repeated example is weaker than a pattern across contexts.' },
-    simple: { kicker: 'Pattern proof', title: 'Where do you see the pattern?', help: 'One place or many places?' },
-    answers: [
-      { id: 'across_contexts', normal: { main: 'Across different contexts', sub: 'The pattern repeats even when the setting changes.' }, simple: { main: 'Many places', sub: 'It shows up in different settings.' }, effects: { wisdom: 0.7, gates: { reality_contact: 0.7 } } },
-      { id: 'same_circle', normal: { main: 'Mostly in one circle', sub: 'The pattern may be real, but the sample is narrow.' }, simple: { main: 'Mostly one place', sub: 'It might be a small sample.' }, effects: { gates: { reality_contact: 0.1, self_correction: 0.3 }, quality: { narrow_sample: 1 } } },
-      { id: 'online_examples', normal: { main: 'Mostly online examples', sub: 'It may still matter, but the input is noisy.' }, simple: { main: 'Mostly online', sub: 'Could be noisy.' }, effects: { gates: { reality_contact: -0.2, counter_consideration: 0.1 }, quality: { noisy_sample: 1 } } }
-    ]
-  },
-  {
-    id: 'intuition_followup',
-    kind: 'followup',
-    normal: { kicker: 'Intuition check', title: 'What should happen before using this result?', help: 'Intuition can start a test. It should not always finish it.' },
-    simple: { kicker: 'Feeling check', title: 'What should happen next?', help: 'A feeling can start the work.' },
-    answers: [
-      { id: 'look_for_evidence', normal: { main: 'Find evidence', sub: 'I should anchor the feeling before using it strongly.' }, simple: { main: 'Look for proof', sub: 'Check it first.' }, effects: { gates: { self_correction: 0.7, reality_contact: 0.5 } } },
-      { id: 'use_as_warning', normal: { main: 'Use it as a warning signal', sub: 'I should treat it as a possible clue, not the conclusion.' }, simple: { main: 'Use it as a clue', sub: 'Not the final answer.' }, effects: { wisdom: 0.5, gates: { contradiction_handling: 0.4, self_correction: 0.4 } } },
-      { id: 'trust_feeling', normal: { main: 'Trust the feeling', sub: 'I do not need much more for this scope.' }, simple: { main: 'Trust it', sub: 'The feeling is enough.' }, effects: { gates: { reality_contact: -0.7, self_correction: -0.4 } } }
-    ]
-  },
-  {
-    id: 'identity_anchor_followup',
-    kind: 'followup',
-    normal: { kicker: 'Anchor check', title: 'Is the trusted side allowed to be wrong?', help: 'Trusted groups can be useful filters, but they can also become shields.' },
-    simple: { kicker: 'Team check', title: 'Can your side be wrong?', help: 'Can your trusted people mess up?' },
-    answers: [
-      { id: 'side_can_be_wrong', normal: { main: 'Yes, my side can be wrong', sub: 'I trust them more, but I still need checks.' }, simple: { main: 'Yes', sub: 'My side can mess up.' }, effects: { gates: { non_self_sealing: 0.8, self_correction: 0.6, reality_contact: 0.4 } } },
-      { id: 'side_more_reliable', normal: { main: 'They are more reliable, but not perfect', sub: 'Their track record matters, but it does not end the test.' }, simple: { main: 'They are better, not perfect', sub: 'Still need checks.' }, effects: { practicality: 0.3, gates: { reality_contact: 0.3, non_self_sealing: 0.3 } } },
-      { id: 'side_basically_right', normal: { main: 'They are basically right on this kind of thing', sub: 'I do not need to reopen it every time.' }, simple: { main: 'My side is usually right', sub: 'I trust them here.' }, effects: { gates: { non_self_sealing: -0.5, reality_contact: -0.4 } } }
-    ]
-  },
-  {
-    id: 'source_sorting_followup',
-    kind: 'followup',
-    normal: { kicker: 'Source sorting', title: 'How do you decide what is useful disagreement?', help: 'Source criticism is valid only if it stays accountable.' },
-    simple: { kicker: 'Source check', title: 'How do you sort good points from bad points?', help: 'What is your filter?' },
-    answers: [
-      { id: 'track_record_specific', normal: { main: 'Specific track record', sub: 'I check whether the source has been accurate on this kind of claim.' }, simple: { main: 'Track record', sub: 'Were they right before?' }, effects: { knowledge: 0.6, gates: { reality_contact: 0.7, non_self_sealing: 0.3 } } },
-      { id: 'argument_quality', normal: { main: 'Argument quality', sub: 'I check the claim itself before leaning on source trust.' }, simple: { main: 'The argument itself', sub: 'Does the point work?' }, effects: { wisdom: 0.5, knowledge: 0.4, gates: { non_strawman: 0.6, counter_consideration: 0.4 } } },
-      { id: 'side_membership', normal: { main: 'Which side they are on', sub: 'The side usually tells me what I need to know.' }, simple: { main: 'Their side', sub: 'That tells me enough.' }, effects: { gates: { non_self_sealing: -0.8, non_strawman: -0.5, reality_contact: -0.4 } } }
-    ]
-  },
-  {
-    id: 'bias_claim_followup',
-    kind: 'followup',
-    normal: { kicker: 'Bias check', title: 'What proves the bias is controlling their view?', help: 'Bias can explain errors, but it cannot replace the argument.' },
-    simple: { kicker: 'Bias check', title: 'How do you know bias is the reason?', help: 'What shows it?' },
-    answers: [
-      { id: 'bias_inconsistency', normal: { main: 'They apply standards inconsistently', sub: 'They change rules depending on who benefits.' }, simple: { main: 'Double standard', sub: 'They change rules for their side.' }, effects: { knowledge: 0.6, gates: { reality_contact: 0.7 } } },
-      { id: 'bias_incentive', normal: { main: 'They have a clear incentive', sub: 'Their position protects status, money, power, identity, or convenience.' }, simple: { main: 'They gain from it', sub: 'It helps them.' }, effects: { practicality: 0.5, gates: { reality_contact: 0.4 } } },
-      { id: 'bias_assumed', normal: { main: 'It is mostly assumed', sub: 'Their conclusion sounds like what their side would say.' }, simple: { main: 'I mostly assume it', sub: 'It sounds like their side.' }, effects: { gates: { reality_contact: -0.6, non_strawman: -0.5 } } }
-    ]
-  },
-  {
-    id: 'reaction_confirms_followup',
-    kind: 'followup',
-    normal: { kicker: 'Reaction check', title: 'Could the reaction have another explanation?', help: 'A reaction can be evidence, but it can also be noise.' },
-    simple: { kicker: 'Reaction check', title: 'Could their reaction mean something else?', help: 'Maybe it proves less than it feels like.' },
-    answers: [
-      { id: 'yes_other_explanation', normal: { main: 'Yes, another explanation is possible', sub: 'They may be reacting to tone, framing, timing, or a missing distinction.' }, simple: { main: 'Yes', sub: 'Maybe they reacted to tone or timing.' }, effects: { empathy: 0.4, wisdom: 0.4, gates: { non_self_sealing: 0.7, non_strawman: 0.4 } } },
-      { id: 'reaction_pattern_strong', normal: { main: 'Maybe, but the repeated pattern is strong', sub: 'I should not use one reaction, but repeated reactions across contexts matter.' }, simple: { main: 'Maybe, but it happens a lot', sub: 'One time is weak. Many times matter.' }, effects: { wisdom: 0.5, gates: { reality_contact: 0.4, counter_consideration: 0.2 } } },
-      { id: 'no_reaction_proves', normal: { main: 'No, the reaction proves the point', sub: 'Their reaction is exactly what the view predicts.' }, simple: { main: 'No, it proves it', sub: 'Their reaction gives it away.' }, effects: { gates: { non_self_sealing: -0.9, counter_consideration: -0.5 } } }
-    ]
-  },
-  {
-    id: 'protect_position_followup',
-    kind: 'followup',
-    normal: { kicker: 'Position check', title: 'Why protect the position first?', help: 'Sometimes a position needs defense. Sometimes the defense becomes the thought.' },
-    simple: { kicker: 'Position check', title: 'Why protect your point first?', help: 'Is it truth, or image?' },
-    answers: [
-      { id: 'prevent_misread', normal: { main: 'To prevent a misread', sub: 'If the claim is distorted, the test becomes useless.' }, simple: { main: 'So people do not twist it', sub: 'The real claim matters.' }, effects: { knowledge: 0.5, gates: { non_strawman: 0.5 } } },
-      { id: 'high_stakes', normal: { main: 'The stakes are high', sub: 'A bad framing could cause real harm or bad action.' }, simple: { main: 'Because it matters a lot', sub: 'Bad framing could hurt people or decisions.' }, effects: { empathy: 0.4, practicality: 0.4, gates: { reality_contact: 0.3 } } },
-      { id: 'dont_want_lose', normal: { main: 'I do not want to lose the point', sub: 'If I give ground, people may use it against the whole view.' }, simple: { main: 'I do not want to lose', sub: 'They might use it against me.' }, effects: { gates: { self_correction: -0.7, non_self_sealing: -0.6 }, quality: { self_protective_signal: 1 } } }
+      {
+        id: 'clear_counterexample',
+        normal: C('A clear counterexample that hits the core.', 'Not every complaint, but a real contradiction would matter.'),
+        simple: C('A real counterexample.', 'If it hits the core, it matters.'),
+        effects: fx({ knowledge: 0.25, gates: { G1_counter_consideration: 0.45, G3_self_correction: 0.45, G6_non_self_sealing: 0.45 }, coverage: { knowledge: 0.5 } })
+      },
+      {
+        id: 'better_framework',
+        normal: C('A better framework that explains more.', 'A stronger model could replace this one.'),
+        simple: C('A better model.', 'If it explains more, it matters.'),
+        effects: fx({ wisdom: 0.35, gates: { G3_self_correction: 0.45, G6_non_self_sealing: 0.35 }, coverage: { wisdom: 0.5 } })
+      },
+      {
+        id: 'trusted_authority_only',
+        normal: C('Only a trusted authority could reopen it.', 'The source matters more than the structure of the challenge.'),
+        simple: C('Only a trusted person.', 'The person matters more than the argument.'),
+        effects: fx({ knowledge: 0.1, gates: { G5_reality_contact: -0.25, G6_non_self_sealing: -0.35 }, quality: { incomplete_signal: 1 } })
+      },
+      {
+        id: 'nothing_reopens',
+        normal: C('Nothing realistic would reopen it.', 'At that point the view is acting sealed for this scope.'),
+        simple: C('Nothing would reopen it.', 'Then it is sealed for this scope.'),
+        effects: fx({ gates: { G1_counter_consideration: -0.65, G3_self_correction: -0.8, G6_non_self_sealing: -0.9 }, quality: { sealed_signal: 2, low_signal: 1 } })
+      }
     ]
   }
-]);
+];

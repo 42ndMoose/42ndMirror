@@ -2,115 +2,73 @@
 
 42ndMirror is a static, deterministic reasoning-shape validator for the Epistemic Octahedron.
 
-It does not use an LLM, backend, API call, model weights, or browser GPU inference. It asks structured adaptive cards, calculates deterministic effects, and outputs a strict xyz coordinate on the octahedron surface:
+It does not use an LLM, backend, model weights, or server scoring. The app asks structured contrast cards, applies deterministic scoring, and outputs an `x,y,z` coordinate that strictly satisfies:
 
-```text
+```txt
 |x| + |y| + |z| = 1
 ```
 
 ## Current scope
 
-This repo focuses only on the test/input side.
+This version focuses only on the test/input engine and projection output. Diachronic mechanisms are intentionally not implemented yet.
 
-Diachronic mechanisms, external output schematics, longitudinal updates, and richer visualizer integration are intentionally left for a later layer.
+Included:
+
+- Fast mode
+- ADHD mode, same scoring as Fast mode with simpler wording
+- Serious mode
+- Scope selector
+- Balanced contrast cards
+- Adaptive follow-up cards
+- Signal-quality checks for sandbox, taste, speed, narrow samples, scope confusion, and closure pressure
+- Deterministic coordinate output
+- Embedded projection into the uploaded Epistemic Octahedron HTML visualizer
 
 ## Axis convention
 
-```text
-x positive = Practicality
-x negative = Empathy
+This repo follows the uploaded visualizer convention:
 
-y positive = stable reasoning
-y negative = unstable reasoning
-
-z positive = Wisdom
-z negative = Knowledge
+```txt
++x = Empathy
+-x = Practicality
++y = positive epistemic stability
+-y = negative epistemic stability
++z = Wisdom
+-z = Knowledge
 ```
 
-This follows the convention that the Knowledge pole is negative Z.
+## Design rule
 
-## Modes
+The app does not interpret the user's free text. The one-sentence label is only a label. The score comes from structured choices.
 
-- Fast mode: short structured validator.
-- ADHD mode: same engine as Fast mode, but simpler wording.
-- Serious mode: more cards and follow-ups.
+That keeps the system auditable and GitHub Pages-safe.
 
-## How it works
+## Run locally
 
-The app does not interpret free text. The user writes a scope label, but that text is not parsed.
-
-The test uses forced-choice cards with deterministic effects:
-
-- Empathy
-- Practicality
-- Wisdom
-- Knowledge
-- Six stability gates:
-  - Counter-consideration
-  - Non-strawman
-  - Self-correction
-  - Contradiction handling
-  - Reality contact
-  - Non-self-sealing
-
-Each answer can also trigger adaptive follow-up cards. This lets the instrument separate similar-looking answers. For example, "I distrust the source" can mean valid source criticism or sealed reasoning, depending on the follow-up.
-
-## Signal-quality net
-
-The app includes signal-quality checks without naming or insulting the user. It marks weak results when answers indicate low effort, sealed reasoning, shallow accounting, noisy samples, or unusually fast clicking.
-
-Signal quality is reported separately from the xyz coordinate.
-
-## Files
-
-```text
-index.html          Static entry point
-styles.css          UI styling
-src/app.js          UI state and rendering
-src/engine.js       Deterministic scoring and projection
-/data/cards.js      Test cards, answers, effects, modes, gates
-```
-
-## Local use
-
-Because this uses ES modules, open it through a local static server:
+Any static server works:
 
 ```bash
-python3 -m http.server 8080
+python3 -m http.server
 ```
 
-Then visit:
+Then open:
 
-```text
-http://localhost:8080
+```txt
+http://localhost:8000
 ```
 
-## GitHub Pages use
+## GitHub Pages
 
-Push this repo to GitHub and enable Pages from the root branch. No build step is required.
+Push the repo contents to a GitHub repository and enable GitHub Pages from the root or `/docs`, depending on your chosen layout.
 
-## Output shape
+## Test
 
-The result JSON includes:
-
-```json
-{
-  "coordinates": {
-    "x": 0,
-    "y": 0,
-    "z": 0,
-    "surface_check": 1,
-    "raw": { "x": 0, "y": 0, "z": 0 }
-  }
-}
+```bash
+npm test
 ```
 
-The public coordinate is always projected onto the octahedron surface.
+The smoke test checks that the engine always returns a surface-valid coordinate.
 
-If the test somehow produces no directional signal, the engine uses a deterministic insufficient-signal fallback:
+## Important limitation
 
-```json
-{ "x": 0, "y": -1, "z": 0 }
-```
-
-That case should be rare because the current card set is designed to produce directional signal.
+This is a validator for a selected scope, not a certification of a person. A character, argument, public figure, or claim can be plotted, but the output should be read according to the breadth and quality of the evidence supplied by the structured answers.

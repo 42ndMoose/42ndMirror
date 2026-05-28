@@ -1,0 +1,2168 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Epistemic Octahedron Plotter</title>
+  <style>
+    :root {
+      --bg: #0b0d12;
+      --panel: rgba(18, 22, 31, 0.94);
+      --panel-border: rgba(255,255,255,0.08);
+      --text: #eef2f7;
+      --muted: #a7b0bf;
+      --accent: #ff3b3b;
+      --btn: #1c2330;
+      --btn-hover: #273145;
+      --shadow: 0 18px 50px rgba(0,0,0,0.38);
+    }
+
+    * { box-sizing: border-box; }
+    html, body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      background: radial-gradient(circle at top, #111723, var(--bg) 60%);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    #app {
+      position: fixed;
+      inset: 0;
+      overflow: hidden;
+    }
+
+    #viewport {
+      position: absolute;
+      inset: 0;
+      cursor: grab;
+      touch-action: none;
+      user-select: none;
+    }
+    #viewport.rotating,
+    #viewport.dragging-point { cursor: grabbing; }
+
+    #ui {
+      position: absolute;
+      top: 16px;
+      left: 16px;
+      width: 340px;
+      max-width: calc(100vw - 32px);
+      display: grid;
+      gap: 12px;
+      z-index: 20;
+      pointer-events: none;
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--panel-border);
+      border-radius: 18px;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(12px);
+      pointer-events: auto;
+    }
+
+    .section {
+      padding: 14px 14px 12px;
+    }
+
+
+    .slider-row {
+      display: grid;
+      gap: 6px;
+      margin-bottom: 12px;
+    }
+
+    .slider-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: nowrap;
+      gap: 12px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .pair-head {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      align-items: center;
+      gap: 12px;
+    }
+
+    .aspect-label {
+      font-size: 12px;
+      font-weight: 400;
+      color: var(--muted);
+      white-space: nowrap;
+      transition: color 120ms ease, font-weight 120ms ease;
+    }
+
+    .aspect-label.right {
+      text-align: right;
+    }
+
+    .aspect-label.active {
+      color: var(--text);
+      font-weight: 700;
+    }
+
+    .stability-label {
+      font-size: 12px;
+      font-weight: 400;
+      color: var(--muted);
+      white-space: nowrap;
+      transition: color 120ms ease, font-weight 120ms ease;
+    }
+
+    .stability-label.active {
+      color: var(--text);
+      font-weight: 700;
+    }
+
+    .range-wrap {
+      position: relative;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      appearance: none;
+      height: 8px;
+      border-radius: 999px;
+      background: linear-gradient(90deg, rgba(255,255,255,0.14), rgba(255,255,255,0.08));
+      outline: none;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      appearance: none;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: white;
+      border: 2px solid #0d1118;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.34);
+      cursor: pointer;
+    }
+
+    input[type="range"]::-moz-range-thumb {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: white;
+      border: 2px solid #0d1118;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.34);
+      cursor: pointer;
+    }
+
+    .hover-tooltip {
+      position: fixed;
+      left: 0;
+      top: 0;
+      transform: translate(-50%, calc(-100% - 10px));
+      padding: 6px 8px;
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,0.1);
+      background: rgba(9, 12, 18, 0.92);
+      color: var(--text);
+      font-size: 11px;
+      font-weight: 700;
+      line-height: 1;
+      white-space: nowrap;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.32);
+      backdrop-filter: blur(10px);
+      pointer-events: none;
+      opacity: 0;
+      z-index: 30;
+      transition: opacity 90ms ease;
+    }
+
+    .hover-tooltip.show {
+      opacity: 1;
+    }
+
+    .coords {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .coord {
+      border: 1px solid var(--panel-border);
+      border-radius: 12px;
+      padding: 10px;
+      background: rgba(255,255,255,0.03);
+    }
+
+    .coord .k {
+      font-size: 11px;
+      color: var(--muted);
+      margin-bottom: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .coord .v {
+      font-size: 16px;
+      font-weight: 700;
+    }
+
+    .coord-input {
+      width: 100%;
+      padding: 0;
+      margin: 0;
+      border: 0;
+      outline: none;
+      background: transparent;
+      color: var(--text);
+      font: inherit;
+      font-size: 16px;
+      font-weight: 700;
+      line-height: 1.2;
+      caret-color: var(--text);
+      user-select: text;
+    }
+
+    .coord-input::selection {
+      background: rgba(255,255,255,0.22);
+      color: var(--text);
+    }
+
+    button {
+      appearance: none;
+      border: 1px solid var(--panel-border);
+      background: var(--btn);
+      color: var(--text);
+      border-radius: 12px;
+      padding: 10px 12px;
+      font: inherit;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 140ms ease, transform 140ms ease;
+    }
+
+    button:hover { background: var(--btn-hover); }
+    button:active { transform: translateY(1px); }
+
+    .small-float {
+      position: absolute;
+      right: 16px;
+      top: 16px;
+      z-index: 20;
+      display: flex;
+      gap: 8px;
+      pointer-events: none;
+    }
+
+    .small-float > * { pointer-events: auto; }
+
+    .hint {
+      position: absolute;
+      right: 16px;
+      bottom: 16px;
+      max-width: min(420px, calc(100vw - 32px));
+      z-index: 20;
+      pointer-events: none;
+    }
+
+    .hint .section {
+      padding: 12px 14px;
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+
+    .crosshair {
+      position: absolute;
+      width: 20px;
+      height: 20px;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      z-index: 15;
+      display: none;
+    }
+
+    .crosshair::before,
+    .crosshair::after {
+      content: "";
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 10px rgba(255, 59, 59, 0.7);
+      transform: translate(-50%, -50%);
+    }
+
+    .crosshair::before {
+      width: 18px;
+      height: 2px;
+      border-radius: 999px;
+    }
+
+    .crosshair::after {
+      width: 2px;
+      height: 18px;
+      border-radius: 999px;
+    }
+
+    .view-labels {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      z-index: 14;
+      display: block;
+      font-size: 12px;
+      font-weight: 700;
+      color: rgba(255,255,255,0.84);
+      text-shadow: 0 2px 10px rgba(0,0,0,0.6);
+    }
+
+    .view-labels .tag {
+      position: absolute;
+      transform: translate(-50%, -50%);
+      padding: 6px 8px;
+      background: rgba(9, 12, 18, 0.5);
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,0.08);
+      backdrop-filter: blur(6px);
+      white-space: nowrap;
+      transition: opacity 120ms ease;
+    }
+
+
+    .region-card {
+      position: absolute;
+      right: 16px;
+      bottom: 16px;
+      width: min(430px, calc(100vw - 32px));
+      max-height: min(52vh, 520px);
+      z-index: 22;
+      pointer-events: none;
+      overflow: hidden;
+      transition: opacity 120ms ease, transform 120ms ease;
+    }
+
+    .region-card.dimmed {
+      opacity: 0.72;
+    }
+
+    .region-card .section {
+      padding: 14px 16px 16px;
+    }
+
+    .region-kicker {
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+
+    .region-title {
+      font-size: 18px;
+      font-weight: 800;
+      line-height: 1.15;
+      color: var(--text);
+      margin-bottom: 4px;
+    }
+
+    .region-meta {
+      font-size: 11px;
+      color: var(--muted);
+      margin-bottom: 10px;
+    }
+
+    .region-explanation {
+      display: grid;
+      gap: 8px;
+      font-size: 12px;
+      line-height: 1.38;
+      color: rgba(238, 242, 247, 0.92);
+    }
+
+    .region-explanation .step {
+      display: grid;
+      grid-template-columns: 20px minmax(0, 1fr);
+      gap: 8px;
+      align-items: start;
+    }
+
+    .region-explanation .num {
+      width: 20px;
+      height: 20px;
+      border-radius: 999px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.08);
+      color: rgba(255,255,255,0.86);
+      font-size: 10px;
+      font-weight: 800;
+      line-height: 1;
+    }
+
+    .region-explanation b {
+      color: #ffffff;
+    }
+
+    .mono { font-variant-numeric: tabular-nums; }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="viewport"></div>
+
+    <div id="ui">
+      <div class="panel section">
+        <div class="slider-row">
+          <div class="slider-head pair-head">
+            <span id="practicalitySliderLabel" class="aspect-label">Practicality</span>
+            <span id="empathySliderLabel" class="aspect-label right">Empathy</span>
+          </div>
+          <div class="range-wrap"><input id="practicality" type="range" min="0" max="100" step="0.1" value="50" /></div>
+        </div>
+
+        <div class="slider-row">
+          <div class="slider-head pair-head">
+            <span id="wisdomSliderLabel" class="aspect-label">Wisdom</span>
+            <span id="knowledgeSliderLabel" class="aspect-label right">Knowledge</span>
+          </div>
+          <div class="range-wrap"><input id="wisdom" type="range" min="0" max="100" step="0.1" value="50" /></div>
+        </div>
+
+        <div class="slider-row" style="margin-bottom: 4px;">
+          <div class="slider-head">
+            <span id="negativeStabilityLabel" class="stability-label">Negative Epistemic Stability</span>
+            <span id="positiveStabilityLabel" class="stability-label">Positive Epistemic Stability</span>
+          </div>
+          <div class="range-wrap"><input id="stability" type="range" min="-100" max="100" step="0.1" value="0" /></div>
+        </div>
+
+        <div class="coords">
+          <div class="coord">
+            <div class="k">X</div>
+            <input id="coord-x" class="v mono coord-input" type="text" value="0.000" inputmode="decimal" spellcheck="false" autocomplete="off" />
+          </div>
+          <div class="coord">
+            <div class="k">Y</div>
+            <input id="coord-y" class="v mono coord-input" type="text" value="0.000" inputmode="decimal" spellcheck="false" autocomplete="off" />
+          </div>
+          <div class="coord">
+            <div class="k">Z</div>
+            <input id="coord-z" class="v mono coord-input" type="text" value="0.000" inputmode="decimal" spellcheck="false" autocomplete="off" />
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="small-float">
+      <button id="resetBtn">Reset to center</button>
+      <button id="rotateLeftBtn" style="display:none;">↻ 90°</button>
+      <button id="rotateRightBtn" style="display:none;">↺ 90°</button>
+    </div>
+
+    <div id="crosshair" class="crosshair"></div>
+    <div id="viewLabels" class="view-labels">
+      <div id="labelEmpathy" class="tag">Empathy</div>
+      <div id="labelPracticality" class="tag">Practicality</div>
+      <div id="labelWisdom" class="tag">Wisdom</div>
+      <div id="labelKnowledge" class="tag">Knowledge</div>
+    </div>
+
+    <div id="regionCard" class="region-card panel dimmed">
+      <div class="section">
+        <div class="region-kicker">Surface region</div>
+        <div id="regionTitle" class="region-title">Hover over the octahedron</div>
+        <div id="regionMeta" class="region-meta">Move your cursor across the surface to read the region.</div>
+        <div id="regionExplanation" class="region-explanation">
+          <div class="step"><span class="num">1</span><span>Each surface area is mapped to one interpretive region.</span></div>
+          <div class="step"><span class="num">2</span><span>The explanation changes as your cursor moves.</span></div>
+          <div class="step"><span class="num">3</span><span>No extra floating axis labels were added. The labels live on the surface map.</span></div>
+        </div>
+      </div>
+    </div>
+    <div id="sliderTooltip" class="hover-tooltip"></div>
+    <div id="aspectTooltip" class="hover-tooltip"></div>
+  </div>
+
+  <script type="module">
+    import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
+
+    const viewport = document.getElementById('viewport');
+    const practicalityEl = document.getElementById('practicality');
+    const wisdomEl = document.getElementById('wisdom');
+    const stabilityEl = document.getElementById('stability');
+    const practicalitySliderLabel = document.getElementById('practicalitySliderLabel');
+    const empathySliderLabel = document.getElementById('empathySliderLabel');
+    const wisdomSliderLabel = document.getElementById('wisdomSliderLabel');
+    const knowledgeSliderLabel = document.getElementById('knowledgeSliderLabel');
+    const negativeStabilityLabel = document.getElementById('negativeStabilityLabel');
+    const positiveStabilityLabel = document.getElementById('positiveStabilityLabel');
+    const coordX = document.getElementById('coord-x');
+    const coordY = document.getElementById('coord-y');
+    const coordZ = document.getElementById('coord-z');
+    const resetBtn = document.getElementById('resetBtn');
+    const rotateLeftBtn = document.getElementById('rotateLeftBtn');
+    const rotateRightBtn = document.getElementById('rotateRightBtn');
+    const crosshair = document.getElementById('crosshair');
+    const viewLabels = document.getElementById('viewLabels');
+    const labelEmpathy = document.getElementById('labelEmpathy');
+    const labelPracticality = document.getElementById('labelPracticality');
+    const labelWisdom = document.getElementById('labelWisdom');
+    const labelKnowledge = document.getElementById('labelKnowledge');
+    const sliderTooltip = document.getElementById('sliderTooltip');
+    const aspectTooltip = document.getElementById('aspectTooltip');
+
+    const regionCard = document.getElementById('regionCard');
+    const regionTitle = document.getElementById('regionTitle');
+    const regionMeta = document.getElementById('regionMeta');
+    const regionExplanation = document.getElementById('regionExplanation');
+
+    const rangeInputs = [practicalityEl, wisdomEl, stabilityEl];
+    const aspectTooltipDefs = [
+      { node: practicalitySliderLabel, input: practicalityEl, side: 'left' },
+      { node: empathySliderLabel, input: practicalityEl, side: 'right' },
+      { node: wisdomSliderLabel, input: wisdomEl, side: 'left' },
+      { node: knowledgeSliderLabel, input: wisdomEl, side: 'right' }
+    ];
+
+    const scene = new THREE.Scene();
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    viewport.appendChild(renderer.domElement);
+
+    const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.01, 100);
+
+    scene.add(new THREE.AmbientLight(0xffffff, 1.3));
+
+    const keyLight = new THREE.DirectionalLight(0xffffff, 1.35);
+    keyLight.position.set(3, 4, 5);
+    scene.add(keyLight);
+
+    const rimLight = new THREE.DirectionalLight(0xffffff, 0.65);
+    rimLight.position.set(-4, 2, -3);
+    scene.add(rimLight);
+
+    const grid = new THREE.GridHelper(8, 16, 0x445066, 0x263041);
+    grid.position.y = -1.75;
+    grid.material.transparent = true;
+    grid.material.opacity = 0.22;
+    scene.add(grid);
+
+    const rootGroup = new THREE.Group();
+    scene.add(rootGroup);
+
+    const octaGroup = new THREE.Group();
+    rootGroup.add(octaGroup);
+
+    const octaGeom = new THREE.OctahedronGeometry(1, 0);
+    const solidMat = new THREE.MeshPhysicalMaterial({
+      color: 0x98a7c7,
+      transparent: true,
+      opacity: 0.26,
+      roughness: 0.72,
+      metalness: 0,
+      side: THREE.FrontSide,
+      depthWrite: true,
+      polygonOffset: true,
+      polygonOffsetFactor: 1,
+      polygonOffsetUnits: 1
+    });
+    octaGroup.add(new THREE.Mesh(octaGeom, solidMat));
+
+    octaGroup.add(new THREE.LineSegments(
+      new THREE.EdgesGeometry(octaGeom),
+      new THREE.LineBasicMaterial({ color: 0xe6edf9, transparent: true, opacity: 0.3, depthTest: true })
+    ));
+
+    const equatorPoints = [
+      new THREE.Vector3(1, 0, 0),
+      new THREE.Vector3(0, 0, 1),
+      new THREE.Vector3(-1, 0, 0),
+      new THREE.Vector3(0, 0, -1),
+      new THREE.Vector3(1, 0, 0)
+    ];
+    octaGroup.add(new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints(equatorPoints),
+      new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.14, depthTest: true })
+    ));
+
+    octaGroup.add(new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(-1.2, 0, 0), new THREE.Vector3(1.2, 0, 0)]),
+      new THREE.LineBasicMaterial({ color: 0x6ad1ff, transparent: true, opacity: 0.16, depthTest: true })
+    ));
+
+    octaGroup.add(new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, -1.2), new THREE.Vector3(0, 0, 1.2)]),
+      new THREE.LineBasicMaterial({ color: 0xffd36a, transparent: true, opacity: 0.16, depthTest: true })
+    ));
+
+    const pickMesh = new THREE.Mesh(
+      octaGeom,
+      new THREE.MeshBasicMaterial({ visible: false, side: THREE.DoubleSide })
+    );
+    octaGroup.add(pickMesh);
+
+    const pointerConeHeight = 0.13;
+    const pointerConeRadius = 0.05;
+    const pointerLift = 0.0025;
+    const pointerMaterial = new THREE.MeshStandardMaterial({
+      color: 0xff3b3b,
+      roughness: 0.35,
+      metalness: 0.05,
+      emissive: 0x320404
+    });
+
+    const pointerMarker = new THREE.Group();
+    pointerMarker.renderOrder = 5;
+
+    const pointerOuterCone = new THREE.Mesh(
+      new THREE.ConeGeometry(pointerConeRadius, pointerConeHeight, 26, 1),
+      pointerMaterial
+    );
+    pointerOuterCone.position.y = pointerConeHeight * 1.5;
+    pointerMarker.add(pointerOuterCone);
+
+    const pointerInnerCone = new THREE.Mesh(
+      new THREE.ConeGeometry(pointerConeRadius, pointerConeHeight, 26, 1),
+      pointerMaterial
+    );
+    pointerInnerCone.rotation.z = Math.PI;
+    pointerInnerCone.position.y = pointerConeHeight * 0.5;
+    pointerMarker.add(pointerInnerCone);
+
+    octaGroup.add(pointerMarker);
+
+    const raycaster = new THREE.Raycaster();
+    const ndc = new THREE.Vector2();
+    const tempVec3 = new THREE.Vector3();
+    const tempQuat = new THREE.Quaternion();
+    const labelCenterLocal = new THREE.Vector3(0, 0, 0);
+    const labelDefs = [
+      { node: labelEmpathy, local: new THREE.Vector3(1, 0, 0) },
+      { node: labelPracticality, local: new THREE.Vector3(-1, 0, 0) },
+      { node: labelWisdom, local: new THREE.Vector3(0, 0, 1) },
+      { node: labelKnowledge, local: new THREE.Vector3(0, 0, -1) }
+    ];
+
+    const WORLD_X = new THREE.Vector3(1, 0, 0);
+    const WORLD_Y = new THREE.Vector3(0, 1, 0);
+    const WORLD_Z = new THREE.Vector3(0, 0, 1);
+
+    const state = {
+      target: new THREE.Vector3(0, 0, 0),
+      distance: 4.25,
+      panVel: new THREE.Vector3(),
+      zoomVel: 0,
+      draggingPoint: false,
+      rotating: false,
+      lastX: 0,
+      lastY: 0,
+      point: new THREE.Vector3(0, 0, 0),
+      pointNormal: new THREE.Vector3(0, 1, 0),
+      snappedTopBottom: false,
+      orientation: new THREE.Quaternion(),
+      angularAxis: new THREE.Vector3(0, 1, 0),
+      angularSpeed: 0,
+      snapQuat: null,
+      rotateGrabLocal: null,
+      rotateGrabFaceIndex: null,
+      rotateGrabFaceNormal: null,
+      rotateFallbackActive: false,
+      rotateGrabValid: false,
+      lastSnapKey: null,
+      surfaceLocked: false,
+      stabilitySign: 1,
+      hoveredSlider: null,
+      hoveredAspectLabel: null,
+      hoveredRegionKey: null
+    };
+
+    const SNAP_EPS = THREE.MathUtils.degToRad(10);
+    const PAN_DAMP = 0.82;
+    const ZOOM_DAMP = 0.86;
+    const ANGULAR_DAMP = 0.9;
+    const CANONICAL_VIEWS = [];
+    const CANONICAL_SIDE_VIEWS = [];
+
+    function makeCanonicalQuat(yaw, pitch) {
+      return new THREE.Quaternion().setFromEuler(new THREE.Euler(pitch, yaw, 0, 'YXZ'));
+    }
+
+    function buildCanonicalViews() {
+      const yaws = [0, Math.PI / 2, Math.PI, -Math.PI / 2];
+      for (const yaw of yaws) {
+        const side = { key: `side-${yaw}`, type: 'side', yaw, pitch: 0, quat: makeCanonicalQuat(yaw, 0) };
+        CANONICAL_VIEWS.push(side);
+        CANONICAL_SIDE_VIEWS.push(side);
+        CANONICAL_VIEWS.push({ key: `top-${yaw}`, type: 'top', yaw, pitch: -Math.PI / 2, quat: makeCanonicalQuat(yaw, -Math.PI / 2) });
+        CANONICAL_VIEWS.push({ key: `bottom-${yaw}`, type: 'bottom', yaw, pitch: Math.PI / 2, quat: makeCanonicalQuat(yaw, Math.PI / 2) });
+      }
+    }
+    buildCanonicalViews();
+
+    function setNDCFromEvent(event) {
+      const rect = renderer.domElement.getBoundingClientRect();
+      ndc.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      ndc.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+    }
+
+    function syncSceneMatrices() {
+      rootGroup.position.copy(state.target);
+      octaGroup.quaternion.copy(state.orientation);
+      rootGroup.updateMatrixWorld(true);
+      camera.updateMatrixWorld();
+    }
+
+    function sliderToDomain(v) {
+      return v / 100;
+    }
+
+    function bipolarFromPair(posValue) {
+      return sliderToDomain(posValue) * 2 - 1;
+    }
+
+    function bipolarFromReversedPair(posValue) {
+      return -bipolarFromPair(posValue);
+    }
+
+    function pairFromBipolar(t) {
+      return (THREE.MathUtils.clamp(t, -1, 1) + 1) * 50;
+    }
+
+    function reversedPairFromBipolar(t) {
+      return pairFromBipolar(-t);
+    }
+
+    function formatCoordValue(value) {
+      const cleaned = Math.abs(value) < 5e-7 ? 0 : value;
+      const formatted = cleaned.toFixed(3);
+      return formatted === '-0.000' ? '0.000' : formatted;
+    }
+
+    function parseCoordValue(text) {
+      const trimmed = text.trim();
+      if (!trimmed) return null;
+      const parsed = Number(trimmed);
+      return Number.isFinite(parsed) ? parsed : null;
+    }
+
+    function formatPercentNumber(value, { signed = false } = {}) {
+      const cleaned = Math.abs(value) < 0.05 ? 0 : value;
+      const rounded = Math.round(cleaned * 10) / 10;
+      const whole = Math.abs(rounded - Math.round(rounded)) < 1e-9;
+      const text = whole ? String(Math.round(rounded)) : rounded.toFixed(1);
+      if (!signed) return `${text}%`;
+      const prefix = rounded > 0 ? '+' : '';
+      return `${prefix}${text}%`;
+    }
+
+    function getPairSliderKnobPercent(input) {
+      return Math.abs(parseFloat(input.value) - 50) * 2;
+    }
+
+    function getAspectLabelPercent(input, side) {
+      const value = parseFloat(input.value);
+      return side === 'left' ? 100 - value : value;
+    }
+
+    function updateStabilitySignFromSlider(rawValue = parseFloat(stabilityEl.value)) {
+      if (rawValue > 0.0001) state.stabilitySign = 1;
+      else if (rawValue < -0.0001) state.stabilitySign = -1;
+    }
+
+    function updateStabilityLabels() {
+      const value = parseFloat(stabilityEl.value);
+      const eps = 0.0001;
+      negativeStabilityLabel.classList.toggle('active', value < -eps);
+      positiveStabilityLabel.classList.toggle('active', value > eps);
+    }
+
+    function updatePairLabels(leftLabel, rightLabel, axisValue, positiveSide, stabilityValue) {
+      const eps = 0.0001;
+      leftLabel.classList.remove('active');
+      rightLabel.classList.remove('active');
+
+      if (axisValue > eps) {
+        (positiveSide === 'left' ? leftLabel : rightLabel).classList.add('active');
+        return;
+      }
+
+      if (axisValue < -eps) {
+        (positiveSide === 'left' ? rightLabel : leftLabel).classList.add('active');
+        return;
+      }
+
+      if (stabilityValue > eps) {
+        leftLabel.classList.add('active');
+        rightLabel.classList.add('active');
+      }
+    }
+
+    function updateAspectLabels() {
+      const x = bipolarFromPair(parseFloat(practicalityEl.value));
+      const z = bipolarFromReversedPair(parseFloat(wisdomEl.value));
+      const stabilityValue = parseFloat(stabilityEl.value);
+
+      updatePairLabels(practicalitySliderLabel, empathySliderLabel, x, 'right', stabilityValue);
+      updatePairLabels(wisdomSliderLabel, knowledgeSliderLabel, z, 'left', stabilityValue);
+    }
+
+    function engageSurfaceLock(preferredSign = null) {
+      state.surfaceLocked = true;
+      if (preferredSign === 1 || preferredSign === -1) {
+        state.stabilitySign = preferredSign;
+        return;
+      }
+      updateStabilitySignFromSlider();
+    }
+
+    function pointFromControls() {
+      if (!state.surfaceLocked) {
+        return new THREE.Vector3(0, 0, 0);
+      }
+
+      const xAxis = bipolarFromPair(parseFloat(practicalityEl.value));
+      const zAxis = bipolarFromReversedPair(parseFloat(wisdomEl.value));
+      const norm = Math.max(1, Math.abs(xAxis) + Math.abs(zAxis));
+      const x = xAxis / norm;
+      const z = zAxis / norm;
+      const yMag = Math.max(0, 1 - Math.abs(x) - Math.abs(z));
+      const y = yMag * state.stabilitySign;
+
+      stabilityEl.value = (y * 100).toFixed(3);
+      return new THREE.Vector3(x, y, z);
+    }
+
+    function controlsFromPoint(point, options = {}) {
+      const { preserveActiveCoordRaw = false } = options;
+      const practicality = pairFromBipolar(point.x);
+      const wisdom = reversedPairFromBipolar(point.z);
+
+      practicalityEl.value = practicality.toFixed(3);
+      wisdomEl.value = wisdom.toFixed(3);
+      stabilityEl.value = (THREE.MathUtils.clamp(point.y, -1, 1) * 100).toFixed(3);
+
+      if (Math.abs(point.y) > 1e-6) {
+        state.stabilitySign = Math.sign(point.y);
+      }
+      if (Math.abs(point.x) + Math.abs(point.y) + Math.abs(point.z) > 1e-5) {
+        state.surfaceLocked = true;
+      }
+
+      updateStabilityLabels();
+      updateAspectLabels();
+      updateCoordLabels({ preserveActiveCoordRaw });
+      if (state.hoveredSlider) showSliderTooltip(state.hoveredSlider);
+      if (state.hoveredAspectLabel) showAspectTooltip(state.hoveredAspectLabel);
+      invalidateRender();
+    }
+
+    function projectPointToOctaSurface(localPoint) {
+      const manhattan = Math.abs(localPoint.x) + Math.abs(localPoint.y) + Math.abs(localPoint.z);
+      if (manhattan < 1e-8) {
+        return new THREE.Vector3(0, state.stabilitySign, 0);
+      }
+      return localPoint.clone().multiplyScalar(1 / manhattan);
+    }
+
+    function getOctaSurfaceNormal(localPoint) {
+      const normal = new THREE.Vector3(
+        Math.abs(localPoint.x) > 1e-6 ? Math.sign(localPoint.x) : 0,
+        Math.abs(localPoint.y) > 1e-6 ? Math.sign(localPoint.y) : 0,
+        Math.abs(localPoint.z) > 1e-6 ? Math.sign(localPoint.z) : 0,
+      );
+
+      if (normal.lengthSq() < 1e-8) {
+        normal.set(0, state.stabilitySign >= 0 ? 1 : -1, 0);
+      }
+
+      return normal.normalize();
+    }
+
+    function updatePointerNormalFromPoint() {
+      const p = state.point.clone();
+      const sum = Math.abs(p.x) + Math.abs(p.y) + Math.abs(p.z);
+      if (sum > 1e-8) {
+        const surfacePoint = Math.abs(sum - 1) < 0.0005 ? p : projectPointToOctaSurface(p);
+        state.pointNormal.copy(getOctaSurfaceNormal(surfacePoint));
+      } else {
+        state.pointNormal.set(0, 1, 0);
+      }
+    }
+
+    function applyPointVisuals() {
+      const p = state.point.clone();
+      const n = state.pointNormal.clone().normalize();
+      pointerMarker.position.copy(p).addScaledVector(n, 0.0025);
+      tempQuat.setFromUnitVectors(WORLD_Y, n);
+      pointerMarker.quaternion.copy(tempQuat);
+    }
+
+    function updateCoordLabels(options = {}) {
+      const { preserveActiveCoordRaw = false } = options;
+      const active = preserveActiveCoordRaw ? document.activeElement : null;
+
+      if (active !== coordX) coordX.value = formatCoordValue(state.point.x);
+      if (active !== coordY) coordY.value = formatCoordValue(state.point.y);
+      if (active !== coordZ) coordZ.value = formatCoordValue(state.point.z);
+    }
+
+    function getFallbackSignForAxis(axis) {
+      if (axis === 'y') {
+        if (Math.abs(state.point.x) > 1e-8) return Math.sign(state.point.x);
+        if (Math.abs(state.point.z) > 1e-8) return Math.sign(state.point.z);
+        return 1;
+      }
+      return state.stabilitySign >= 0 ? 1 : -1;
+    }
+
+    function rebalancePointFromAxis(axis, rawValue) {
+      const next = state.point.clone();
+      const edited = THREE.MathUtils.clamp(rawValue, -1, 1);
+      next[axis] = edited;
+
+      const otherAxes = ['x', 'y', 'z'].filter((key) => key !== axis);
+      const remaining = Math.max(0, 1 - Math.abs(edited));
+      const otherAbsSum = Math.abs(next[otherAxes[0]]) + Math.abs(next[otherAxes[1]]);
+
+      if (remaining < 1e-8) {
+        next[otherAxes[0]] = 0;
+        next[otherAxes[1]] = 0;
+        return projectPointToOctaSurface(next);
+      }
+
+      if (otherAbsSum > 1e-8) {
+        const scale = remaining / otherAbsSum;
+        next[otherAxes[0]] *= scale;
+        next[otherAxes[1]] *= scale;
+      } else {
+        next[otherAxes[0]] = 0;
+        next[otherAxes[1]] = 0;
+        const fallbackAxis = axis === 'y' ? 'x' : 'y';
+        next[fallbackAxis] = remaining * getFallbackSignForAxis(axis);
+      }
+
+      return projectPointToOctaSurface(next);
+    }
+
+    function applyCoordAxisInput(axis, rawValue, preserveActiveCoordRaw = true) {
+      const next = rebalancePointFromAxis(axis, rawValue);
+      state.point.copy(next);
+      state.surfaceLocked = true;
+      if (Math.abs(next.y) > 1e-6) state.stabilitySign = Math.sign(next.y);
+      updatePointerNormalFromPoint();
+      applyPointVisuals();
+      controlsFromPoint(next, { preserveActiveCoordRaw });
+      invalidateRender();
+    }
+
+    function commitCoordInput(axis, input) {
+      const parsed = parseCoordValue(input.value);
+      if (parsed === null) {
+        input.value = formatCoordValue(state.point[axis]);
+        return;
+      }
+
+      applyCoordAxisInput(axis, parsed, false);
+      input.value = formatCoordValue(state.point[axis]);
+    }
+
+    function setupCoordInputs() {
+      const defs = [
+        { axis: 'x', input: coordX },
+        { axis: 'y', input: coordY },
+        { axis: 'z', input: coordZ }
+      ];
+
+      for (const { axis, input } of defs) {
+        input.addEventListener('pointerdown', (event) => {
+          if (document.activeElement !== input) return;
+          const fullySelected = input.selectionStart === 0 && input.selectionEnd === input.value.length;
+          if (!fullySelected) return;
+          event.preventDefault();
+          requestAnimationFrame(() => {
+            const end = input.value.length;
+            input.setSelectionRange(end, end);
+          });
+        });
+
+        input.addEventListener('focus', () => {
+          requestAnimationFrame(() => {
+            if (document.activeElement === input) input.select();
+          });
+        });
+
+        input.addEventListener('input', () => {
+          const parsed = parseCoordValue(input.value);
+          if (parsed === null) return;
+          applyCoordAxisInput(axis, parsed, true);
+        });
+
+        input.addEventListener('keydown', (event) => {
+          if (event.key === 'Enter') {
+            event.preventDefault();
+            commitCoordInput(axis, input);
+            input.blur();
+            return;
+          }
+
+          if (event.key === 'Tab') {
+            commitCoordInput(axis, input);
+            return;
+          }
+
+          if (event.key === 'Escape') {
+            input.value = formatCoordValue(state.point[axis]);
+            input.blur();
+          }
+        });
+
+        input.addEventListener('blur', () => {
+          commitCoordInput(axis, input);
+        });
+      }
+    }
+
+    function applyPointFromControls() {
+      state.point.copy(pointFromControls());
+      updatePointerNormalFromPoint();
+      applyPointVisuals();
+      updateStabilityLabels();
+      updateAspectLabels();
+      updateCoordLabels();
+      if (state.hoveredSlider) showSliderTooltip(state.hoveredSlider);
+      if (state.hoveredAspectLabel) showAspectTooltip(state.hoveredAspectLabel);
+      invalidateRender();
+    }
+
+    function formatSliderPercent(input) {
+      const value = parseFloat(input.value);
+      if (input === stabilityEl) {
+        return formatPercentNumber(value, { signed: true });
+      }
+      return formatPercentNumber(getPairSliderKnobPercent(input));
+    }
+
+    function showSliderTooltip(input) {
+      if (!input) return;
+      const rect = input.getBoundingClientRect();
+      const min = parseFloat(input.min || '0');
+      const max = parseFloat(input.max || '100');
+      const value = parseFloat(input.value);
+      const ratio = max === min ? 0 : (value - min) / (max - min);
+      const x = rect.left + rect.width * ratio;
+      const y = rect.top;
+
+      sliderTooltip.textContent = formatSliderPercent(input);
+      sliderTooltip.style.left = `${Math.max(16, Math.min(window.innerWidth - 16, x))}px`;
+      sliderTooltip.style.top = `${y}px`;
+      sliderTooltip.classList.add('show');
+      input.title = sliderTooltip.textContent;
+    }
+
+    function hideSliderTooltip() {
+      state.hoveredSlider = null;
+      sliderTooltip.classList.remove('show');
+    }
+
+    function showAspectTooltip(def) {
+      if (!def) return;
+      const rect = def.node.getBoundingClientRect();
+      const x = rect.left + rect.width / 2;
+      const y = rect.top;
+
+      aspectTooltip.textContent = formatPercentNumber(getAspectLabelPercent(def.input, def.side));
+      aspectTooltip.style.left = `${Math.max(16, Math.min(window.innerWidth - 16, x))}px`;
+      aspectTooltip.style.top = `${y}px`;
+      aspectTooltip.classList.add('show');
+      def.node.title = aspectTooltip.textContent;
+    }
+
+    function hideAspectTooltip() {
+      state.hoveredAspectLabel = null;
+      aspectTooltip.classList.remove('show');
+    }
+
+    function installSliderTooltips() {
+      for (const input of rangeInputs) {
+        input.addEventListener('pointerenter', () => {
+          state.hoveredSlider = input;
+          showSliderTooltip(input);
+        });
+        input.addEventListener('pointermove', () => {
+          state.hoveredSlider = input;
+          showSliderTooltip(input);
+        });
+        input.addEventListener('pointerleave', hideSliderTooltip);
+        input.addEventListener('blur', hideSliderTooltip);
+      }
+    }
+
+    function installAspectTooltips() {
+      for (const def of aspectTooltipDefs) {
+        def.node.addEventListener('pointerenter', () => {
+          state.hoveredAspectLabel = def;
+          showAspectTooltip(def);
+        });
+        def.node.addEventListener('pointermove', () => {
+          state.hoveredAspectLabel = def;
+          showAspectTooltip(def);
+        });
+        def.node.addEventListener('pointerleave', hideAspectTooltip);
+      }
+    }
+
+    function setupSliders() {
+      practicalityEl.addEventListener('input', () => {
+        engageSurfaceLock();
+        applyPointFromControls();
+      invalidateRender();
+      });
+
+      wisdomEl.addEventListener('input', () => {
+        engageSurfaceLock();
+        applyPointFromControls();
+      invalidateRender();
+      });
+
+      stabilityEl.addEventListener('input', () => {
+        const raw = parseFloat(stabilityEl.value);
+        const preferredSign = raw < 0 ? -1 : 1;
+        engageSurfaceLock(preferredSign);
+        applyPointFromControls();
+      invalidateRender();
+      });
+
+      for (const input of rangeInputs) {
+        input.addEventListener('input', () => {
+          if (state.hoveredSlider === input) showSliderTooltip(input);
+        });
+      }
+    }
+
+    function angleBetweenQuats(a, b) {
+      return 2 * Math.acos(Math.min(1, Math.abs(a.dot(b))));
+    }
+
+    function nearestCanonicalSideView(quat = state.orientation) {
+      let best = null;
+      let bestAngle = Infinity;
+      for (const entry of CANONICAL_SIDE_VIEWS) {
+        const ang = angleBetweenQuats(quat, entry.quat);
+        if (ang < bestAngle) {
+          bestAngle = ang;
+          best = entry;
+        }
+      }
+      return { entry: best, angle: bestAngle };
+    }
+
+    function projectVectorOntoPlane(vector, planeNormal) {
+      return vector.clone().addScaledVector(planeNormal, -vector.dot(planeNormal));
+    }
+
+    function getTopBottomSnapInfo(quat = state.orientation) {
+      const stabilityAxisWorld = WORLD_Y.clone().applyQuaternion(quat).normalize();
+      const zDot = THREE.MathUtils.clamp(stabilityAxisWorld.dot(WORLD_Z), -1, 1);
+      const angle = Math.acos(Math.abs(zDot));
+      const targetY = zDot >= 0 ? WORLD_Z.clone() : WORLD_Z.clone().negate();
+
+      let targetX = WORLD_X.clone().applyQuaternion(quat);
+      targetX = projectVectorOntoPlane(targetX, targetY);
+
+      if (targetX.lengthSq() < 1e-8) {
+        targetX = new THREE.Vector3(0, 0, 1).applyQuaternion(quat);
+        targetX = projectVectorOntoPlane(targetX, targetY);
+      }
+
+      if (targetX.lengthSq() < 1e-8) {
+        targetX = projectVectorOntoPlane(WORLD_X.clone(), targetY);
+      }
+
+      targetX.normalize();
+      const targetZ = new THREE.Vector3().crossVectors(targetX, targetY).normalize();
+      const snapMatrix = new THREE.Matrix4().makeBasis(targetX, targetY, targetZ);
+      const snapQuat = new THREE.Quaternion().setFromRotationMatrix(snapMatrix).normalize();
+
+      return {
+        type: zDot >= 0 ? 'top' : 'bottom',
+        key: zDot >= 0 ? 'top-axis' : 'bottom-axis',
+        angle,
+        quat: snapQuat
+      };
+    }
+
+    function applySnapSlerp() {
+      if (!state.snapQuat) return;
+      state.orientation.slerp(state.snapQuat, 0.18);
+      if (angleBetweenQuats(state.orientation, state.snapQuat) < 0.0015) {
+        state.orientation.copy(state.snapQuat);
+        state.snapQuat = null;
+      }
+    }
+
+    function applyAngularMomentum() {
+      if (state.rotating) return;
+      if (state.angularSpeed > 1e-5) {
+        tempQuat.setFromAxisAngle(state.angularAxis, state.angularSpeed);
+        state.orientation.multiply(tempQuat).normalize();
+        state.angularSpeed *= ANGULAR_DAMP;
+      } else {
+        state.angularSpeed = 0;
+      }
+    }
+
+    function applyCamera() {
+      applySnapSlerp();
+      applyAngularMomentum();
+
+      state.target.add(state.panVel);
+      state.distance = Math.max(1.7, Math.min(12, state.distance + state.zoomVel));
+      state.panVel.multiplyScalar(PAN_DAMP);
+      state.zoomVel *= ZOOM_DAMP;
+
+      syncSceneMatrices();
+      camera.position.set(0, 0, state.distance);
+      camera.lookAt(rootGroup.position);
+      camera.updateMatrixWorld();
+      updateSnapFlags();
+    }
+
+    function maybeSnapView() {
+      const topBottom = getTopBottomSnapInfo();
+      if (topBottom.angle < SNAP_EPS) {
+        state.snapQuat = topBottom.quat;
+        return;
+      }
+
+      const { entry, angle } = nearestCanonicalSideView();
+      if (entry && angle < SNAP_EPS) {
+        state.snapQuat = entry.quat.clone();
+      }
+    }
+
+    function updateSnapFlags() {
+      const topBottom = getTopBottomSnapInfo();
+      const snappedTopBottom = topBottom.angle < 0.025;
+      state.snappedTopBottom = snappedTopBottom;
+      state.lastSnapKey = snappedTopBottom ? topBottom.key : null;
+      rotateLeftBtn.style.display = snappedTopBottom ? '' : 'none';
+      rotateRightBtn.style.display = snappedTopBottom ? '' : 'none';
+      viewLabels.style.display = 'block';
+      crosshair.style.display = snappedTopBottom ? 'block' : 'none';
+    }
+
+    function intersectSurface(event) {
+      syncSceneMatrices();
+      setNDCFromEvent(event);
+      raycaster.setFromCamera(ndc, camera);
+      const hits = raycaster.intersectObject(pickMesh, false);
+      return hits.length ? hits[0] : null;
+    }
+
+    function startPointDrag(event) {
+      const hit = intersectSurface(event);
+      if (!hit) return false;
+      state.draggingPoint = true;
+      viewport.classList.add('dragging-point');
+      applyHitToPoint(hit);
+      return true;
+    }
+
+    function startSurfaceRotate(event) {
+      const hit = intersectSurface(event);
+      if (!hit) return false;
+
+      const grabLocal = octaGroup.worldToLocal(hit.point.clone());
+      if (grabLocal.lengthSq() < 1e-8) return false;
+
+      state.rotating = true;
+      state.snapQuat = null;
+      state.angularSpeed = 0;
+      viewport.classList.add('rotating');
+      state.rotateGrabLocal = grabLocal.normalize();
+      state.rotateGrabFaceIndex = Number.isInteger(hit.faceIndex) ? hit.faceIndex : null;
+      state.rotateGrabFaceNormal = hit.face ? hit.face.normal.clone().normalize() : null;
+      state.rotateFallbackActive = false;
+      state.rotateGrabValid = true;
+      return true;
+    }
+
+    const ROTATE_DRAG_SCALE = 0.0065;
+
+    function applyScreenDeltaRotate(dx, dy) {
+      if (Math.abs(dx) + Math.abs(dy) < 1e-6) return;
+
+      const yawQuat = new THREE.Quaternion().setFromAxisAngle(WORLD_Y, dx * ROTATE_DRAG_SCALE);
+      const pitchQuat = new THREE.Quaternion().setFromAxisAngle(WORLD_X, dy * ROTATE_DRAG_SCALE);
+      tempQuat.copy(yawQuat).multiply(pitchQuat).normalize();
+
+      state.orientation.premultiply(tempQuat).normalize();
+      syncSceneMatrices();
+
+      const axis = tempVec3.set(tempQuat.x, tempQuat.y, tempQuat.z);
+      if (axis.lengthSq() > 1e-10) {
+        axis.normalize();
+        state.angularAxis.copy(axis);
+        state.angularSpeed = 2 * Math.acos(Math.min(1, Math.max(-1, tempQuat.w)));
+      }
+    }
+
+    function isSameGrabbedRotateFace(hit) {
+      if (!hit || !hit.face) return false;
+
+      if (Number.isInteger(state.rotateGrabFaceIndex) && hit.faceIndex !== state.rotateGrabFaceIndex) {
+        return false;
+      }
+
+      if (state.rotateGrabFaceNormal) {
+        return hit.face.normal.dot(state.rotateGrabFaceNormal) > 0.999;
+      }
+
+      return true;
+    }
+
+    function applySurfaceRotate(event, dx = 0, dy = 0) {
+      if (!state.rotateGrabValid || !state.rotateGrabLocal) return;
+
+      if (state.rotateFallbackActive) {
+        applyScreenDeltaRotate(dx, dy);
+        return;
+      }
+
+      const hit = intersectSurface(event);
+
+      if (!isSameGrabbedRotateFace(hit)) {
+        state.rotateFallbackActive = true;
+        applyScreenDeltaRotate(dx, dy);
+        return;
+      }
+
+      const currentLocal = octaGroup.worldToLocal(hit.point.clone()).normalize();
+      if (currentLocal.lengthSq() < 1e-8 || state.rotateGrabLocal.lengthSq() < 1e-8) return;
+
+      tempQuat.setFromUnitVectors(state.rotateGrabLocal, currentLocal);
+      state.orientation.multiply(tempQuat).normalize();
+      syncSceneMatrices();
+
+      const axis = tempVec3.set(tempQuat.x, tempQuat.y, tempQuat.z);
+      if (axis.lengthSq() > 1e-10) {
+        axis.normalize();
+        state.angularAxis.copy(axis);
+        state.angularSpeed = 2 * Math.acos(Math.min(1, Math.max(-1, tempQuat.w)));
+      }
+    }
+
+    function applyHitToPoint(hit) {
+      const localPoint = projectPointToOctaSurface(octaGroup.worldToLocal(hit.point.clone()));
+      state.point.copy(localPoint);
+      state.surfaceLocked = true;
+      if (Math.abs(localPoint.y) > 1e-6) state.stabilitySign = Math.sign(localPoint.y);
+      updatePointerNormalFromPoint();
+      controlsFromPoint(localPoint);
+      applyPointVisuals();
+      invalidateRender();
+    }
+
+
+
+    const REGION_FOCUS_TEXT = {
+      E: '<b>Empathy side</b> = you care a lot about people, feelings, harm, fairness, and how choices affect real lives.',
+      P: '<b>Practicality side</b> = you care a lot about what works, what can actually be done, limits, costs, and consequences.',
+      W: '<b>Wisdom side</b> = you care a lot about context, timing, proportion, limits, and how knowledge should be used.',
+      K: '<b>Knowledge side</b> = you care a lot about facts, evidence, details, credentials, and knowing your stuff.',
+      EW: '<b>Empathy + wisdom</b> = you care about people, but you also try to read context, limits, and consequences.',
+      WP: '<b>Wisdom + practicality</b> = you care about context and good judgment, but you also care about what will actually work.',
+      PK: '<b>Practicality + knowledge</b> = you care about useful action, facts, systems, skill, and technical accuracy.',
+      KE: '<b>Knowledge + empathy</b> = you care about facts and evidence, but you also care about people and fairness.',
+      Ekw: '<b>Empathy-dominant lane</b> = care for people is the main pull, while facts and judgment are trying to keep it steady.',
+      Wep: '<b>Wisdom-dominant lane</b> = context and judgment are the main pull, while people and real-world limits stay in view.',
+      Pwk: '<b>Practicality-dominant lane</b> = getting things done is the main pull, while facts and judgment keep it from becoming sloppy.',
+      Kep: '<b>Knowledge-dominant lane</b> = facts are the main pull, while people and practical reality keep the facts useful.',
+      ewpkPositive: '<b>Integrated upper region</b> = empathy, practicality, wisdom, and knowledge are not fighting for control anymore.',
+      ewpkNegative: '<b>Near-collapse lower region</b> = the whole worldview is active, but the thinking is becoming deeply distorted.',
+      upper: '<b>Upper vertex</b> = the four sides have been integrated under the strongest positive stability.',
+      lower: '<b>Lower vertex</b> = the worldview is active, but it has fallen into maximum negative stability.'
+    };
+
+    const REGION_STABILITY_TEXT = {
+      borderline: '<b>On the equator</b> = your thinking has very low stability. You are right on the edge between improving and sliding into distortion.',
+      positive: '<b>Positive stability</b> = your thinking can check itself, stay connected to reality, and update when better information shows up.',
+      strongPositive: '<b>Strong positive stability</b> = the same pattern is steadier. You are less likely to panic, overreact, or lose the plot when challenged.',
+      negative: '<b>Negative stability</b> = the pattern can become distorted. It may feel certain, but it does not correct itself well.',
+      strongNegative: '<b>Strong negative stability</b> = the pattern is harder to break. Correction can feel threatening, insulting, or useless.',
+      peak: '<b>Maximum positive stability</b> = the person can shift between care, facts, context, and action without getting passively pulled around.',
+      collapse: '<b>Maximum negative stability</b> = the person is not just confused. The whole pattern is actively reality-collapsed.'
+    };
+
+    const REGION_DETAILS = {
+      'border-E': {
+        region: 'Borderline E', title: 'Sensitive', focus: 'E', stability: 'borderline',
+        result: 'Your sense of safety gets tied to whether people feel cared for. A disagreement can feel personal even when it is not meant that way.'
+      },
+      'border-W': {
+        region: 'Borderline W', title: 'Hesitant / Over-Reflective', focus: 'W', stability: 'borderline',
+        result: 'You keep thinking, rechecking, and reading between the lines, but you may struggle to land the plane and decide.'
+      },
+      'border-P': {
+        region: 'Borderline P', title: 'Blunt', focus: 'P', stability: 'borderline',
+        result: 'You push toward what works, but because stability is low, you can sound harsh, impatient, or too quick to cut through people’s concerns.'
+      },
+      'border-K': {
+        region: 'Borderline K', title: 'Defensive / Insecure', focus: 'K', stability: 'borderline',
+        result: 'Your self-worth gets tied to being the knowledgeable one. When someone questions you, it can feel like an attack on who you are.'
+      },
+      'border-EW': {
+        region: 'Borderline EW', title: 'Naive Idealist', focus: 'EW', stability: 'borderline',
+        result: 'You want the caring and meaningful answer, but it may float above real-world limits. It can sound beautiful while still being fragile.'
+      },
+      'border-WP': {
+        region: 'Borderline WP', title: 'Guarded Skeptic', focus: 'WP', stability: 'borderline',
+        result: 'You try to be careful and realistic, but low stability can make you guarded, suspicious, or slow to trust anything.'
+      },
+      'border-PK': {
+        region: 'Borderline PK', title: 'Cold Technician', focus: 'PK', stability: 'borderline',
+        result: 'You lean on function and facts, but the human side can feel like noise. You may solve the task while missing the person.'
+      },
+      'border-KE': {
+        region: 'Borderline KE', title: 'Impressionable Advocate / Credential-Gullible', focus: 'KE', stability: 'borderline',
+        result: 'You care about people and facts, but you may trust whoever sounds official or credentialed too quickly.'
+      },
+
+      'pos-single-E': {
+        region: 'Positive E', title: 'Empathetic', focus: 'E', stability: 'positive',
+        result: 'You notice how choices affect people. The care is real, but it still needs facts, context, and practical limits to become mature judgment.'
+      },
+      'pos-strong-single-E': {
+        region: 'Strong Positive E', title: 'Compassionate', focus: 'E', stability: 'strongPositive',
+        result: 'You can care for people without instantly turning every problem into panic, blame, or rescuing.'
+      },
+      'pos-single-W': {
+        region: 'Positive W', title: 'Discerning', focus: 'W', stability: 'positive',
+        result: 'You are trying to read the situation properly instead of reacting to the loudest fact or feeling.'
+      },
+      'pos-strong-single-W': {
+        region: 'Strong Positive W', title: 'Judicious', focus: 'W', stability: 'strongPositive',
+        result: 'You can slow things down, weigh context, and make a cleaner call without pretending you know everything.'
+      },
+      'pos-single-P': {
+        region: 'Positive P', title: 'Practical', focus: 'P', stability: 'positive',
+        result: 'You look for the workable path. You care about limits, tradeoffs, and what can actually be done.'
+      },
+      'pos-strong-single-P': {
+        region: 'Strong Positive P', title: 'Grounded', focus: 'P', stability: 'strongPositive',
+        result: 'You stay attached to reality. You do not let nice ideas or scary feelings drag you away from what is actually possible.'
+      },
+      'pos-single-K': {
+        region: 'Positive K', title: 'Informed', focus: 'K', stability: 'positive',
+        result: 'You use facts and details instead of guessing. You can still update when the facts change.'
+      },
+      'pos-strong-single-K': {
+        region: 'Strong Positive K', title: 'Knowledgeable', focus: 'K', stability: 'strongPositive',
+        result: 'You know your material and can handle correction without treating it like humiliation.'
+      },
+
+      'pos-lane-E': {
+        region: 'Positive Ekw', title: 'Regulated Empathy', focus: 'Ekw', stability: 'positive',
+        result: 'Your care for people is controlled by facts and context, so it does not become blind emotion.'
+      },
+      'pos-strong-lane-E': {
+        region: 'Strong Positive Ekw', title: 'Mature Compassion', focus: 'Ekw', stability: 'strongPositive',
+        result: 'You can care deeply while staying fair, calm, and reality-bound.'
+      },
+      'pos-lane-W': {
+        region: 'Positive Wep', title: 'Balanced Discernment', focus: 'Wep', stability: 'positive',
+        result: 'Your judgment watches context, but it still keeps people and practical reality in the picture.'
+      },
+      'pos-strong-lane-W': {
+        region: 'Strong Positive Wep', title: 'Settled Judgment', focus: 'Wep', stability: 'strongPositive',
+        result: 'You can weigh the situation calmly and land on a clear judgment without spiraling forever.'
+      },
+      'pos-lane-P': {
+        region: 'Positive Pwk', title: 'Grounded Effectiveness', focus: 'Pwk', stability: 'positive',
+        result: 'You get things done while keeping enough facts and judgment in play.'
+      },
+      'pos-strong-lane-P': {
+        region: 'Strong Positive Pwk', title: 'Disciplined Execution', focus: 'Pwk', stability: 'strongPositive',
+        result: 'You can execute without becoming sloppy, cruel, or tunnel-visioned.'
+      },
+      'pos-lane-K': {
+        region: 'Positive Kep', title: 'Evidence-Grounded Clarity', focus: 'Kep', stability: 'positive',
+        result: 'Facts stay connected to people and action, so knowledge helps instead of becoming a flex.'
+      },
+      'pos-strong-lane-K': {
+        region: 'Strong Positive Kep', title: 'Truth-Tracking Expertise', focus: 'Kep', stability: 'strongPositive',
+        result: 'You understand the facts deeply and use them in a steady, useful way.'
+      },
+
+      'pos-pair-EW': {
+        region: 'Positive EW', title: 'Compassionate Discernment', focus: 'EW', stability: 'positive',
+        result: 'You care about people while also asking what the situation really means and what consequences may follow.'
+      },
+      'pos-strong-pair-EW': {
+        region: 'Strong Positive EW', title: 'Principled Compassion', focus: 'EW', stability: 'strongPositive',
+        result: 'Your care has backbone. It is not just emotion. It is guided by judgment and proportion.'
+      },
+      'pos-pair-WP': {
+        region: 'Positive WP', title: 'Strategic Restraint', focus: 'WP', stability: 'positive',
+        result: 'You know when not to rush. You try to choose the move that fits the situation and actually works.'
+      },
+      'pos-strong-pair-WP': {
+        region: 'Strong Positive WP', title: 'Disciplined Strategy', focus: 'WP', stability: 'strongPositive',
+        result: 'You can plan carefully, act at the right time, and avoid both panic and fantasy.'
+      },
+      'pos-pair-PK': {
+        region: 'Positive PK', title: 'Effective Operator', focus: 'PK', stability: 'positive',
+        result: 'You combine facts with execution. You can make things work, but you still need care and context for full maturity.'
+      },
+      'pos-strong-pair-PK': {
+        region: 'Strong Positive PK', title: 'High-Competence Instrumentalist', focus: 'PK', stability: 'strongPositive',
+        result: 'You are highly capable at using facts and systems to get results, though this still needs the other sides to become fully integrated.'
+      },
+      'pos-pair-KE': {
+        region: 'Positive KE', title: 'Evidence-Informed Concern', focus: 'KE', stability: 'positive',
+        result: 'You care about people, but you try to ground that care in facts instead of vibes alone.'
+      },
+      'pos-strong-pair-KE': {
+        region: 'Strong Positive KE', title: 'Humane Expertise', focus: 'KE', stability: 'strongPositive',
+        result: 'You can use expertise in a way that still sees people as people.'
+      },
+
+      'pos-ewpk': {
+        region: 'Positive ewpk', title: 'Philosophically Mature / Integrated', focus: 'ewpkPositive', stability: 'positive',
+        result: 'The main parts are working together. No single side is blindly driving the whole worldview.'
+      },
+      'pos-strong-ewpk': {
+        region: 'Strong Positive ewpk', title: 'Near-Peak Integrated Maturity', focus: 'ewpkPositive', stability: 'strongPositive',
+        result: 'The system is close to mature integration. The person can move between care, facts, context, and action without falling apart.'
+      },
+      'upper-vertex': {
+        region: 'Upper vertex', title: 'Objective Peak Philosophical Maturity', focus: 'upper', stability: 'peak',
+        result: 'This is the model’s mature limit: not perfect knowledge, but fully integrated judgment under maximum positive stability.'
+      },
+
+      'neg-single-E': {
+        region: 'Negative E', title: 'Victimhood Fixation', focus: 'E', stability: 'negative',
+        result: 'Care turns into seeing everything through harm, grievance, or unfairness. The person may stop checking whether the story is true.'
+      },
+      'neg-strong-single-E': {
+        region: 'Strong Negative E', title: 'Grievance Identity', focus: 'E', stability: 'strongNegative',
+        result: 'Pain and unfairness become part of identity. Correction can feel like betrayal or cruelty.'
+      },
+      'neg-single-W': {
+        region: 'Negative W', title: 'Pseudo-Discernment / False Profundity', focus: 'W', stability: 'negative',
+        result: 'It can sound deep, but it may be overreading patterns, inventing meanings, or floating away from facts.'
+      },
+      'neg-strong-single-W': {
+        region: 'Strong Negative W', title: 'Dogmatic Pseudo-Discernment', focus: 'W', stability: 'strongNegative',
+        result: 'The person acts like their interpretation is deeper than everyone else’s, even when reality pushes back.'
+      },
+      'neg-single-P': {
+        region: 'Negative P', title: 'Callous Pragmatism', focus: 'P', stability: 'negative',
+        result: 'What works starts to matter so much that people, truth, or fairness become easy to ignore.'
+      },
+      'neg-strong-single-P': {
+        region: 'Strong Negative P', title: 'Ruthless Pragmatism', focus: 'P', stability: 'strongNegative',
+        result: 'The person may treat cruelty as strength because it seems efficient or useful.'
+      },
+      'neg-single-K': {
+        region: 'Negative K', title: 'Defensive Pseudo-Knowledge', focus: 'K', stability: 'negative',
+        result: 'Facts become armor. The person may use information to win, posture, or avoid admitting a mistake.'
+      },
+      'neg-strong-single-K': {
+        region: 'Strong Negative K', title: 'Arrogant Pseudo-Expertise', focus: 'K', stability: 'strongNegative',
+        result: 'The person acts like being corrected is impossible because they already “know better.”'
+      },
+
+      'neg-lane-E': {
+        region: 'Negative Ekw', title: 'Despairing Nihilist', focus: 'Ekw', stability: 'negative',
+        result: 'Care for people curdles into hopelessness. The person may still care, but the care collapses into resentment or despair.'
+      },
+      'neg-strong-lane-E': {
+        region: 'Strong Negative Ekw', title: 'Nihilistic Resentment', focus: 'Ekw', stability: 'strongNegative',
+        result: 'The person may believe nothing can be fixed, then use that despair to justify bitterness.'
+      },
+      'neg-lane-W': {
+        region: 'Negative Wep', title: 'Manipulative Interpreter', focus: 'Wep', stability: 'negative',
+        result: 'Reading context becomes a tool for bending people instead of understanding what is true.'
+      },
+      'neg-strong-lane-W': {
+        region: 'Strong Negative Wep', title: 'Coercive Manipulator', focus: 'Wep', stability: 'strongNegative',
+        result: 'The person uses “insight” into people and situations to pressure, trap, or control.'
+      },
+      'neg-lane-P': {
+        region: 'Negative Pwk', title: 'Opportunist', focus: 'Pwk', stability: 'negative',
+        result: 'Effectiveness becomes detached from truth and care. The question becomes only “What can I get away with?”'
+      },
+      'neg-strong-lane-P': {
+        region: 'Strong Negative Pwk', title: 'Predatory Opportunist', focus: 'Pwk', stability: 'strongNegative',
+        result: 'The person uses practical skill to exploit openings, not to build anything trustworthy.'
+      },
+      'neg-lane-K': {
+        region: 'Negative Kep', title: 'Malicious Rationalizer', focus: 'Kep', stability: 'negative',
+        result: 'Facts and arguments are used to excuse what the person already wants to do.'
+      },
+      'neg-strong-lane-K': {
+        region: 'Strong Negative Kep', title: 'Weaponized Rationalizer', focus: 'Kep', stability: 'strongNegative',
+        result: 'The person turns knowledge into a weapon for defending harm, manipulation, or self-serving stories.'
+      },
+
+      'neg-pair-EW': {
+        region: 'Negative EW', title: 'Pathological Altruist', focus: 'EW', stability: 'negative',
+        result: 'Helping becomes distorted. The person may hurt reality, themselves, or others while believing they are being caring.'
+      },
+      'neg-strong-pair-EW': {
+        region: 'Strong Negative EW', title: 'Coercive Altruist', focus: 'EW', stability: 'strongNegative',
+        result: 'The person may control others “for their own good” and call that compassion.'
+      },
+      'neg-pair-WP': {
+        region: 'Negative WP', title: 'Manipulative Strategist', focus: 'WP', stability: 'negative',
+        result: 'Judgment and practicality become strategy without honest grounding. The person can read the room and use it.'
+      },
+      'neg-strong-pair-WP': {
+        region: 'Strong Negative WP', title: 'Predatory Strategist', focus: 'WP', stability: 'strongNegative',
+        result: 'The person plans carefully, but the plan is built around control, advantage, or exploitation.'
+      },
+      'neg-pair-PK': {
+        region: 'Negative PK', title: 'Cold Rationalizer', focus: 'PK', stability: 'negative',
+        result: 'Facts and utility become an excuse machine. The person can make cold choices sound reasonable.'
+      },
+      'neg-strong-pair-PK': {
+        region: 'Strong Negative PK', title: 'Self-Sealing Rationalizer', focus: 'PK', stability: 'strongNegative',
+        result: 'Every challenge gets turned into another reason why the person was already right.'
+      },
+      'neg-pair-KE': {
+        region: 'Negative KE', title: 'Credential-Driven Moralist', focus: 'KE', stability: 'negative',
+        result: 'Facts, credentials, and moral concern get mixed into a status game. Being “correct” becomes more important than being reality-bound.'
+      },
+      'neg-strong-pair-KE': {
+        region: 'Strong Negative KE', title: 'Ideological Zealot', focus: 'KE', stability: 'strongNegative',
+        result: 'The person uses facts, status, and moral language to lock in a worldview that no longer corrects itself.'
+      },
+
+      'neg-ewpk': {
+        region: 'Negative ewpk', title: 'Generalized Delusional Collapse', focus: 'ewpkNegative', stability: 'negative',
+        result: 'The whole worldview is starting to fail, not just one side. Reality-contact, correction, and proportion are breaking down together.'
+      },
+      'neg-strong-ewpk': {
+        region: 'Strong Negative ewpk', title: 'Near-Total Epistemic Collapse', focus: 'ewpkNegative', stability: 'strongNegative',
+        result: 'The system is close to full collapse. Correction barely gets in because the worldview protects the distortion.'
+      },
+      'lower-vertex': {
+        region: 'Lower vertex', title: 'Pure Epistemic Collapse', focus: 'lower', stability: 'collapse',
+        result: 'This is the model’s bottom limit: active thinking has collapsed into maximum distortion.'
+      }
+    };
+
+    function axisCodeFromX(x) {
+      return x >= 0 ? 'E' : 'P';
+    }
+
+    function axisCodeFromZ(z) {
+      return z >= 0 ? 'W' : 'K';
+    }
+
+    function pairCodeFromSigns(x, z) {
+      const xCode = axisCodeFromX(x);
+      const zCode = axisCodeFromZ(z);
+      if (xCode === 'E' && zCode === 'W') return 'EW';
+      if (xCode === 'P' && zCode === 'W') return 'WP';
+      if (xCode === 'P' && zCode === 'K') return 'PK';
+      return 'KE';
+    }
+
+    function dominantSurfaceCode(point) {
+      const ax = Math.abs(point.x);
+      const az = Math.abs(point.z);
+      const lateral = ax + az;
+
+      if (lateral < 0.16) return 'ewpk';
+
+      const small = Math.min(ax, az);
+      const large = Math.max(ax, az);
+      const ratio = large <= 1e-8 ? 0 : small / large;
+
+      if (small < 0.10 || ratio < 0.34) {
+        if (ax >= az) return axisCodeFromX(point.x);
+        return axisCodeFromZ(point.z);
+      }
+
+      return pairCodeFromSigns(point.x, point.z);
+    }
+
+    function classifyRegionFromPoint(point) {
+      const y = point.y;
+      const ay = Math.abs(y);
+      const code = dominantSurfaceCode(point);
+
+      if (ay <= 0.085) {
+        if (code === 'ewpk') return 'border-EW';
+        return `border-${code}`;
+      }
+
+      if (code === 'ewpk') {
+        if (y > 0) {
+          if (ay >= 0.92) return 'upper-vertex';
+          if (ay >= 0.72) return 'pos-strong-ewpk';
+          return 'pos-ewpk';
+        }
+        if (ay >= 0.92) return 'lower-vertex';
+        if (ay >= 0.72) return 'neg-strong-ewpk';
+        return 'neg-ewpk';
+      }
+
+      const prefix = y > 0 ? 'pos' : 'neg';
+      const strongPrefix = y > 0 ? 'strong' : 'strong';
+      const isPositive = y > 0;
+
+      if (code.length === 1) {
+        if (ay >= 0.32) {
+          return `${prefix}-${ay >= 0.56 ? 'strong-lane' : 'lane'}-${code}`;
+        }
+        return `${prefix}-${ay >= 0.20 ? 'strong-single' : 'single'}-${code}`;
+      }
+
+      return `${prefix}-${ay >= 0.38 ? 'strong-pair' : 'pair'}-${code}`;
+    }
+
+    function regionSteps(detail) {
+      return [
+        REGION_FOCUS_TEXT[detail.focus],
+        REGION_STABILITY_TEXT[detail.stability],
+        `<b>Put those together</b> → ${detail.result}`
+      ];
+    }
+
+    function renderRegionDetail(detail, point = null) {
+      if (!detail) return;
+      regionCard.classList.remove('dimmed');
+      regionTitle.textContent = detail.title;
+      const coordText = point ? ` · x ${formatCoordValue(point.x)}, y ${formatCoordValue(point.y)}, z ${formatCoordValue(point.z)}` : '';
+      regionMeta.textContent = `${detail.region}${coordText}`;
+      regionExplanation.innerHTML = regionSteps(detail).map((step, index) => (
+        `<div class="step"><span class="num">${index + 1}</span><span>${step}</span></div>`
+      )).join('');
+    }
+
+    function showDefaultRegionCard() {
+      state.hoveredRegionKey = null;
+      regionCard.classList.add('dimmed');
+      regionTitle.textContent = 'Hover over the octahedron';
+      regionMeta.textContent = 'Move your cursor across the surface to read the region.';
+      regionExplanation.innerHTML = [
+        'Each surface area is mapped to one interpretive region.',
+        'The explanation changes as your cursor moves.',
+        'No extra floating axis labels were added. The labels live on the surface map.'
+      ].map((step, index) => `<div class="step"><span class="num">${index + 1}</span><span>${step}</span></div>`).join('');
+    }
+
+    function updateHoveredRegionFromLocalPoint(localPoint) {
+      const surfacePoint = projectPointToOctaSurface(localPoint.clone());
+      const key = classifyRegionFromPoint(surfacePoint);
+      const detail = REGION_DETAILS[key];
+      if (!detail) return;
+      if (state.hoveredRegionKey !== key) {
+        state.hoveredRegionKey = key;
+      }
+      renderRegionDetail(detail, surfacePoint);
+    }
+
+    function updateHoveredRegion(event) {
+      const hit = intersectSurface(event);
+      if (!hit) {
+        showDefaultRegionCard();
+        return;
+      }
+      updateHoveredRegionFromLocalPoint(octaGroup.worldToLocal(hit.point.clone()));
+    }
+
+    function projectWorldToScreen(worldPoint) {
+      const v = worldPoint.clone().project(camera);
+      return {
+        x: (v.x * 0.5 + 0.5) * window.innerWidth,
+        y: (-v.y * 0.5 + 0.5) * window.innerHeight,
+        visible: v.z > -1 && v.z <= 1
+      };
+    }
+
+    function projectLocalToScreen(localPoint) {
+      const worldPoint = octaGroup.localToWorld(localPoint.clone());
+      return projectWorldToScreen(worldPoint);
+    }
+
+    function isLabelOccluded(localPoint) {
+      const outerLocal = localPoint.clone().multiplyScalar(1.08);
+      const worldPoint = octaGroup.localToWorld(outerLocal);
+      const cameraPos = camera.getWorldPosition(new THREE.Vector3());
+      const dir = worldPoint.clone().sub(cameraPos);
+      const dist = dir.length();
+      if (dist < 1e-6) return false;
+
+      raycaster.set(cameraPos, dir.normalize());
+      const prevFar = raycaster.far;
+      raycaster.far = Math.max(0.001, dist - 0.03);
+      const hits = raycaster.intersectObject(pickMesh, false);
+      raycaster.far = prevFar;
+      return hits.length > 0;
+    }
+
+    function placeLabel(node, localPoint) {
+      const baseScreen = projectLocalToScreen(localPoint);
+      if (!baseScreen.visible) {
+        node.style.display = 'none';
+        return;
+      }
+
+      const outerScreen = projectLocalToScreen(localPoint.clone().multiplyScalar(1.22));
+      let dx = outerScreen.x - baseScreen.x;
+      let dy = outerScreen.y - baseScreen.y;
+
+      if (Math.hypot(dx, dy) < 0.001) {
+        const centerScreen = projectLocalToScreen(labelCenterLocal);
+        dx = baseScreen.x - centerScreen.x;
+        dy = baseScreen.y - centerScreen.y;
+      }
+
+      const len = Math.hypot(dx, dy) || 1;
+      const offset = state.snappedTopBottom ? 34 : 28;
+      const hidden = !state.snappedTopBottom && isLabelOccluded(localPoint);
+
+      node.style.display = hidden ? 'none' : 'block';
+      node.style.left = `${baseScreen.x + (dx / len) * offset}px`;
+      node.style.top = `${baseScreen.y + (dy / len) * offset}px`;
+      node.style.opacity = hidden ? '0' : '1';
+    }
+
+    function updateCrosshairAndLabels() {
+      if (state.snappedTopBottom) {
+        const pt2 = projectLocalToScreen(state.point);
+        crosshair.style.left = `${pt2.x}px`;
+        crosshair.style.top = `${pt2.y}px`;
+      }
+
+      for (const def of labelDefs) placeLabel(def.node, def.local);
+    }
+
+    function resetView() {
+      state.snapQuat = makeCanonicalQuat(Math.PI / 4, -0.55);
+      state.angularSpeed = 0;
+      state.panVel.set(0, 0, 0);
+      state.zoomVel = 0;
+      state.target.set(0, 0, 0);
+      state.surfaceLocked = false;
+      state.stabilitySign = 1;
+      practicalityEl.value = '50';
+      wisdomEl.value = '50';
+      stabilityEl.value = '0';
+      applyPointFromControls();
+      invalidateRender();
+    }
+
+    function rotateTopView(dir) {
+      if (!state.snappedTopBottom) return;
+      const base = state.snapQuat ? state.snapQuat.clone() : state.orientation.clone();
+      const delta = new THREE.Quaternion().setFromAxisAngle(WORLD_Z, dir * Math.PI / 2);
+      state.snapQuat = delta.multiply(base).normalize();
+    }
+
+    function runSelfTests() {
+      const eps = 1e-6;
+      const near = (a, b, msg) => console.assert(Math.abs(a - b) < eps, msg + ` | got ${a}, expected ${b}`);
+      const truthy = (v, msg) => console.assert(!!v, msg);
+
+      state.surfaceLocked = false;
+      practicalityEl.value = '50'; wisdomEl.value = '50'; stabilityEl.value = '0';
+      let p = pointFromControls();
+      near(p.x, 0, 'initial center x');
+      near(p.y, 0, 'initial center y');
+      near(p.z, 0, 'initial center z');
+
+      state.surfaceLocked = true;
+      state.stabilitySign = 1;
+      practicalityEl.value = '50'; wisdomEl.value = '50';
+      p = pointFromControls();
+      near(p.x, 0, 'balanced positive x');
+      near(p.y, 1, 'balanced positive y');
+      near(p.z, 0, 'balanced positive z');
+
+      state.stabilitySign = -1;
+      p = pointFromControls();
+      near(p.y, -1, 'balanced negative y');
+
+      state.stabilitySign = 1;
+      practicalityEl.value = '100'; wisdomEl.value = '50';
+      p = pointFromControls();
+      near(p.x, 1, 'empathy max x');
+      near(p.y, 0, 'empathy max y');
+      near(p.z, 0, 'empathy max z');
+
+      practicalityEl.value = '0'; wisdomEl.value = '50';
+      p = pointFromControls();
+      near(p.x, -1, 'practicality max x');
+      near(p.y, 0, 'practicality max y');
+      near(p.z, 0, 'practicality max z');
+
+      practicalityEl.value = '50'; wisdomEl.value = '0';
+      p = pointFromControls();
+      near(p.x, 0, 'wisdom max x');
+      near(p.y, 0, 'wisdom max y');
+      near(p.z, 1, 'wisdom max z');
+
+      practicalityEl.value = '50'; wisdomEl.value = '100';
+      p = pointFromControls();
+      near(p.x, 0, 'knowledge max x');
+      near(p.y, 0, 'knowledge max y');
+      near(p.z, -1, 'knowledge max z');
+
+      practicalityEl.value = '75'; wisdomEl.value = '50';
+      p = pointFromControls();
+      near(p.x, 0.5, 'mid empathy x');
+      near(p.y, 0.5, 'mid empathy y');
+      near(p.z, 0, 'mid empathy z');
+
+      practicalityEl.value = '100'; wisdomEl.value = '0';
+      p = pointFromControls();
+      near(p.x, 0.5, 'dual max x projected');
+      near(p.y, 0, 'dual max y projected');
+      near(p.z, 0.5, 'dual max z projected');
+
+      controlsFromPoint(new THREE.Vector3(0.5, 0.5, 0));
+      near(parseFloat(practicalityEl.value), 75, 'inverse practicality-axis slider from surface point');
+      near(parseFloat(wisdomEl.value), 50, 'inverse wisdom from surface point');
+      near(parseFloat(stabilityEl.value), 50, 'inverse stability from surface point');
+
+      controlsFromPoint(new THREE.Vector3(0, 0, 1));
+      near(parseFloat(wisdomEl.value), 0, 'inverse wisdom slider reaches left for wisdom');
+
+      controlsFromPoint(new THREE.Vector3(0, 0, -1));
+      near(parseFloat(wisdomEl.value), 100, 'inverse wisdom slider reaches right for knowledge');
+
+      const projected = projectPointToOctaSurface(new THREE.Vector3(0.2, 0.2, 0));
+      near(projected.x, 0.5, 'projected drag point x');
+      near(projected.y, 0.5, 'projected drag point y');
+      near(projected.z, 0, 'projected drag point z');
+      truthy(getOctaSurfaceNormal(new THREE.Vector3(0.5, 0.5, 0)).distanceTo(new THREE.Vector3(1, 1, 0).normalize()) < eps, 'drag normal matches octa face');
+
+      state.point.set(0, 1, 0);
+      let manual = rebalancePointFromAxis('x', -0.4);
+      near(manual.x, -0.4, 'coord edit x keeps edited value');
+      near(manual.y, 0.6, 'coord edit x rebalances y');
+      near(manual.z, 0, 'coord edit x keeps z at zero');
+
+      state.point.set(0.5, 0.5, 0);
+      manual = rebalancePointFromAxis('z', 0.25);
+      near(manual.x, 0.375, 'coord edit z rescales x');
+      near(manual.y, 0.375, 'coord edit z rescales y');
+      near(manual.z, 0.25, 'coord edit z keeps edited z');
+      truthy(formatCoordValue(-0.4) === '-0.400', 'coord format pads leading zero and decimals');
+
+      const qTop = makeCanonicalQuat(0, -Math.PI / 2);
+      truthy(getTopBottomSnapInfo(qTop).type === 'top', 'top-bottom snapping recognizes top');
+
+      stabilityEl.value = '0';
+      updateStabilityLabels();
+      truthy(!negativeStabilityLabel.classList.contains('active'), 'negative label inactive at zero');
+      truthy(!positiveStabilityLabel.classList.contains('active'), 'positive label inactive at zero');
+    }
+
+    renderer.domElement.addEventListener('contextmenu', (e) => e.preventDefault());
+    renderer.domElement.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      state.zoomVel += e.deltaY * 0.0016;
+    }, { passive: false });
+
+    renderer.domElement.addEventListener('pointerdown', (e) => {
+      state.lastX = e.clientX;
+      state.lastY = e.clientY;
+
+      if (e.button === 0) {
+        if (startPointDrag(e)) {
+          e.preventDefault();
+          renderer.domElement.setPointerCapture(e.pointerId);
+          return;
+        }
+      }
+
+      if (e.button === 2) {
+        if (startSurfaceRotate(e)) {
+          e.preventDefault();
+          renderer.domElement.setPointerCapture(e.pointerId);
+          return;
+        }
+      }
+
+      if (e.button === 1) {
+        e.preventDefault();
+        return;
+      }
+    });
+
+    renderer.domElement.addEventListener('pointermove', (e) => {
+      const dx = e.clientX - state.lastX;
+      const dy = e.clientY - state.lastY;
+
+      if (state.draggingPoint) {
+        const hit = intersectSurface(e);
+        if (hit) {
+          applyHitToPoint(hit);
+          updateHoveredRegionFromLocalPoint(octaGroup.worldToLocal(hit.point.clone()));
+        }
+        state.lastX = e.clientX;
+        state.lastY = e.clientY;
+        return;
+      }
+
+      if (state.rotating) {
+        applySurfaceRotate(e, dx, dy);
+        state.lastX = e.clientX;
+        state.lastY = e.clientY;
+        invalidateRender();
+        return;
+      }
+
+      updateHoveredRegion(e);
+      state.lastX = e.clientX;
+      state.lastY = e.clientY;
+    });
+
+    renderer.domElement.addEventListener('pointerleave', showDefaultRegionCard);
+
+    function endPointer(e) {
+      invalidateRender();
+      if (state.draggingPoint) {
+        state.draggingPoint = false;
+        viewport.classList.remove('dragging-point');
+      }
+      if (state.rotating) {
+        state.rotating = false;
+        state.rotateGrabLocal = null;
+        state.rotateGrabFaceIndex = null;
+        state.rotateGrabFaceNormal = null;
+        state.rotateFallbackActive = false;
+        state.rotateGrabValid = false;
+        viewport.classList.remove('rotating');
+        maybeSnapView();
+      }
+      try { renderer.domElement.releasePointerCapture(e.pointerId); } catch {}
+    }
+
+    renderer.domElement.addEventListener('pointerup', endPointer);
+    renderer.domElement.addEventListener('pointercancel', endPointer);
+
+    resetBtn.addEventListener('click', resetView);
+    rotateLeftBtn.addEventListener('click', () => { rotateTopView(-1); invalidateRender(); });
+    rotateRightBtn.addEventListener('click', () => { rotateTopView(1); invalidateRender(); });
+
+    window.addEventListener('resize', () => {
+      invalidateRender();
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      if (state.hoveredSlider) showSliderTooltip(state.hoveredSlider);
+      if (state.hoveredAspectLabel) showAspectTooltip(state.hoveredAspectLabel);
+      invalidateRender();
+    });
+
+    function setPointFromExternal(profileData) {
+      if (!profileData || typeof profileData !== 'object') return;
+      const point = profileData?.data?.point;
+      if (!point || typeof point !== 'object') return;
+      const x = Number(point.x);
+      const y = Number(point.y);
+      const z = Number(point.z);
+      if (![x, y, z].every(Number.isFinite)) return;
+      state.point.set(x, y, z);
+      state.surfaceLocked = Math.abs(x) + Math.abs(y) + Math.abs(z) > 0.0001;
+      if (Math.abs(y) > 1e-6) state.stabilitySign = Math.sign(y);
+      updatePointerNormalFromPoint();
+      applyPointVisuals();
+      controlsFromPoint(state.point);
+      invalidateRender();
+    }
+
+    window.addEventListener('message', (event) => {
+      if (event.data?.type === 'set-profile') {
+        setPointFromExternal(event.data.data);
+      }
+    });
+
+    function readStartupProfilePoint() {
+      const params = new URLSearchParams(window.location.search);
+      const x = Number(params.get('x'));
+      const y = Number(params.get('y'));
+      const z = Number(params.get('z'));
+      if ([x, y, z].every(Number.isFinite)) {
+        return { data: { point: { x, y, z } } };
+      }
+
+      try {
+        const stored = JSON.parse(localStorage.getItem('42ndMirror:lastResult') || 'null');
+        const point = stored?.visualizer_payload?.data?.data?.point || stored?.data?.point || stored?.coordinates;
+        if (!point) return null;
+        const sx = Number(point.x);
+        const sy = Number(point.y);
+        const sz = Number(point.z);
+        if ([sx, sy, sz].every(Number.isFinite)) {
+          return { data: { point: { x: sx, y: sy, z: sz } } };
+        }
+      } catch {}
+      return null;
+    }
+
+    function applyStartupProfilePoint() {
+      const startupPoint = readStartupProfilePoint();
+      if (startupPoint) setPointFromExternal(startupPoint);
+    }
+
+    let needsRender = true;
+
+    function invalidateRender() {
+      needsRender = true;
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+
+      const moving =
+        state.rotating ||
+        state.draggingPoint ||
+        Boolean(state.snapQuat) ||
+        state.angularSpeed > 1e-5 ||
+        state.panVel.lengthSq() > 1e-6 ||
+        Math.abs(state.zoomVel) > 1e-5;
+
+      if (!moving && !needsRender) {
+        return;
+      }
+
+      applyCamera();
+      pointerMarker.visible = !state.snappedTopBottom;
+      updateCrosshairAndLabels();
+      renderer.render(scene, camera);
+      needsRender = moving;
+    }
+
+    installSliderTooltips();
+    installAspectTooltips();
+    setupSliders();
+    setupCoordInputs();
+    applyPointFromControls();
+    resetView();
+    runSelfTests();
+    applyStartupProfilePoint();
+    showDefaultRegionCard();
+    invalidateRender();
+    animate();
+  </script>
+</body>
+</html>

@@ -1,4 +1,4 @@
-import { MODES, SCOPES, GATES } from '../data/cards.js';
+import { MODES, SCOPES } from '../data/cards.js';
 import {
   answerCard,
   calculateResult,
@@ -6,6 +6,7 @@ import {
   getMode,
   getNextCard,
   getReadableText,
+  getScope,
   makeInitialState
 } from './engine.js';
 
@@ -27,18 +28,22 @@ function render() {
 function renderStart() {
   const mode = getMode(selectedMode);
   app.innerHTML = `
-    <section class="card">
+    <section class="card start-card">
       <div class="header">
         <div class="brand">
           <div class="brand-title">42ndMirror</div>
           <div class="brand-subtitle">
-            A deterministic reasoning-shape validator. No LLM, no backend, no model download. It asks structured cards, then outputs an xyz coordinate on the octahedron surface.
+            Deterministic reasoning-shape validator. It does not read minds or parse essays. It makes the user compress a scope into structured contrasts, then outputs an xyz point on the Epistemic Octahedron surface.
           </div>
         </div>
         <div class="badge">${escapeHtml(mode.name)}</div>
       </div>
 
-      <p class="section-title">Choose mode</p>
+      <div class="notice">
+        The result is a plot of the selected scope, not a permanent label for a person. For fictional characters, public figures, or debates, judge visible method and structure before fan appeal.
+      </div>
+
+      <p class="section-title">Mode</p>
       <div class="grid" id="modeGrid">
         ${Object.values(MODES).map(item => `
           <button class="mode-tile ${item.id === selectedMode ? 'selected' : ''}" data-mode="${item.id}" type="button">
@@ -50,7 +55,7 @@ function renderStart() {
 
       <hr />
 
-      <p class="section-title">Choose scope</p>
+      <p class="section-title">Scope</p>
       <div class="grid" id="scopeGrid">
         ${SCOPES.map(item => `
           <button class="scope-tile ${item.id === selectedScope ? 'selected' : ''}" data-scope="${item.id}" type="button">
@@ -61,13 +66,13 @@ function renderStart() {
       </div>
 
       <div class="field-group">
-        <label for="claimInput">Label the scope in one sentence. This text is stored only as a label. The app does not interpret it.</label>
-        <textarea id="claimInput" maxlength="400" placeholder="Example: I think this policy works in theory but fails when enforcement costs are counted.">${escapeHtml(claim)}</textarea>
+        <label for="claimInput">Label the scope in one sentence. The app stores this as a label only. It does not interpret the text.</label>
+        <textarea id="claimInput" maxlength="500" placeholder="Example: L vs Light, judged by method under pressure rather than who I like more.">${escapeHtml(claim)}</textarea>
       </div>
 
       <div class="actions">
         <button id="clearButton" class="ghost-button" type="button">Reset</button>
-        <button id="startButton" class="primary-button" type="button">Start test</button>
+        <button id="startButton" class="primary-button" type="button">Start</button>
       </div>
     </section>
   `;
@@ -118,14 +123,14 @@ function renderCard() {
 
   const text = getReadableText(card, testState.modeId);
   const totalBase = testState.baseDeck.length;
-  const baseProgress = Math.min(testState.baseIndex + 1, totalBase);
   const followCount = testState.askedCardIds.filter(id => id.includes('followup')).length + testState.pendingFollowUps.length;
-  const progressPercent = Math.max(4, Math.min(98, (testState.askedCardIds.length / (totalBase + Math.max(1, followCount))) * 100));
+  const denominator = totalBase + Math.max(0, followCount);
+  const progressPercent = Math.max(5, Math.min(98, (testState.askedCardIds.length / Math.max(1, denominator)) * 100));
 
   app.innerHTML = `
-    <section class="card">
+    <section class="card question-card">
       <div class="progress-wrap">
-        <div class="small">${escapeHtml(getMode(testState.modeId).name)} · Card ${testState.askedCardIds.length + 1}</div>
+        <div class="small">${escapeHtml(getMode(testState.modeId).name)} · ${escapeHtml(getScope(testState.scope).name)} · Card ${testState.askedCardIds.length + 1}</div>
         <div class="progress-line"><div class="progress-bar" style="width:${progressPercent}%"></div></div>
       </div>
 
@@ -147,7 +152,7 @@ function renderCard() {
 
       <div class="actions">
         <button id="backStartButton" class="ghost-button" type="button">Restart</button>
-        <div class="small">Base progress: ${baseProgress}/${totalBase}</div>
+        <div class="small">Base progress: ${Math.min(testState.baseIndex + 1, totalBase)}/${totalBase}</div>
       </div>
     </section>
   `;
@@ -176,19 +181,35 @@ function renderResult() {
   const gatePills = Object.entries(result.gates.items).map(([id, gate]) => `
     <span class="pill ${gate.status}" title="${escapeHtml(id)}">${escapeHtml(gate.label)}: ${escapeHtml(gate.status)}</span>
   `).join('');
+  const coveragePills = Object.entries(result.coverage.items).map(([axis, value]) => `
+    <span class="pill neutral">${escapeHtml(axis)}: ${escapeHtml(value.toFixed ? value.toFixed(2) : String(value))}</span>
+  `).join('');
+
+  saveResult(result);
 
   app.innerHTML = `
-    <section class="card">
+    <section class="card result-card">
       <div class="header">
         <div class="brand">
           <div class="kicker">Result</div>
           <div class="brand-title">${escapeHtml(result.interpretation.label)}</div>
-          <div class="brand-subtitle">This is the plotted shape of the selected scope based only on your structured answers.</div>
+          <div class="brand-subtitle">This is the plotted shape of the selected scope based only on structured answers.</div>
         </div>
-        <div class="badge">signal: ${escapeHtml(result.signal_quality.grade)}</div>
+        <div class="badge">signal: ${escapeHtml(result.signal_quality.grade)} · ${result.signal_quality.score}/100</div>
       </div>
 
       ${result.signal_quality.flags.length ? `<div class="warning">${escapeHtml(result.signal_quality.flags.join(' · '))}</div>` : ''}
+
+      <div class="visualizer-shell">
+        <div class="visualizer-head">
+          <div>
+            <p class="section-title">Projected output</p>
+            <div class="small">The iframe below is the uploaded Epistemic Octahedron HTML receiving the xyz payload.</div>
+          </div>
+          <button id="openVisualizerButton" class="ghost-button" type="button">Open full visualizer</button>
+        </div>
+        <iframe id="visualizerFrame" class="visualizer-frame" src="./visualizer.html?embed=1" title="Epistemic Octahedron visualizer"></iframe>
+      </div>
 
       <div class="result-grid">
         <div>
@@ -199,10 +220,15 @@ function renderResult() {
             ${coordLine('z', coords.z)}
           </div>
           <div class="small" style="margin-top:10px;">Check: |x| + |y| + |z| = ${coords.surface_check}</div>
+          <div class="small">Convention: +x empathy, -x practicality, +z wisdom, -z knowledge.</div>
 
           <hr />
-          <p class="section-title">Gate status</p>
+          <p class="section-title">Gates</p>
           <div class="pill-row">${gatePills}</div>
+
+          <hr />
+          <p class="section-title">Dimension coverage</p>
+          <div class="pill-row">${coveragePills}</div>
         </div>
 
         <div>
@@ -221,7 +247,7 @@ function renderResult() {
 
       <div class="actions">
         <button id="copyButton" class="ghost-button" type="button">Copy JSON</button>
-        <button id="againButton" class="primary-button" type="button">Run another scope</button>
+        <button id="retakeButton" class="primary-button" type="button">Run another plot</button>
       </div>
     </section>
   `;
@@ -235,27 +261,44 @@ function renderResult() {
     }
   });
 
-  app.querySelector('#againButton').addEventListener('click', () => {
+  app.querySelector('#retakeButton').addEventListener('click', () => {
     screen = 'start';
     testState = null;
     lastResult = null;
     render();
   });
+
+  app.querySelector('#openVisualizerButton').addEventListener('click', () => {
+    const url = `./visualizer.html?x=${encodeURIComponent(coords.x)}&y=${encodeURIComponent(coords.y)}&z=${encodeURIComponent(coords.z)}`;
+    window.open(url, '_blank', 'noopener,noreferrer');
+  });
+
+  const frame = app.querySelector('#visualizerFrame');
+  const post = () => postResultToVisualizer(frame, result);
+  frame.addEventListener('load', post);
+  setTimeout(post, 300);
+  setTimeout(post, 1000);
 }
 
-function coordLine(axis, value) {
-  const pct = Math.min(100, Math.round(Math.abs(value) * 100));
+function saveResult(result) {
+  try {
+    localStorage.setItem('42ndMirror:lastResult', JSON.stringify(result));
+  } catch {}
+}
+
+function postResultToVisualizer(frame, result) {
+  try {
+    frame.contentWindow.postMessage(result.visualizer_payload, '*');
+  } catch {}
+}
+
+function coordLine(label, value) {
   return `
     <div class="coord-line">
-      <div class="coord-axis">${axis}</div>
-      <div class="meter"><div class="meter-fill" style="width:${pct}%"></div></div>
-      <div>${formatSigned(value)}</div>
+      <span>${escapeHtml(label)}</span>
+      <strong>${Number(value).toFixed(6)}</strong>
     </div>
   `;
-}
-
-function formatSigned(value) {
-  return `${value >= 0 ? '+' : ''}${Number(value).toFixed(6)}`;
 }
 
 function escapeHtml(value) {
