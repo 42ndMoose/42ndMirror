@@ -3,73 +3,45 @@ import {
   CARD_BANK,
   GATES,
   GATE_WEIGHTS,
+  LOADS,
   MODES,
-  ROUTE_FACETS,
+  PRESSURES,
+  ROUTING_WEIGHTS,
   SCOPES,
   SETTINGS,
   UI_COPY
 } from '../data/cards.js';
 
 const AXES = ['empathy', 'practicality', 'wisdom', 'knowledge'];
+const PRESSURE_IDS = Object.keys(PRESSURES);
 const GATE_IDS = Object.keys(GATES);
-const ROUTES = Object.keys(ROUTE_FACETS);
-const QUALITY_KEYS = [
-  'high_signal',
-  'precision_signal',
-  'provisional_sample',
-  'uncertainty',
-  'narrow_sample',
-  'noisy_sample',
-  'needs_disambiguation',
-  'low_signal',
-  'low_stakes',
-  'taste_sample',
-  'social_performance_pressure',
-  'score_badge_pressure',
-  'answer_shopping_signal',
-  'polished_neutrality_signal'
-];
 
-const SCOPE_ROUTE_BIAS = {
-  claim: { evidence_claim: 0.32, value_tradeoff: 0.12 },
-  decision: { micro_action: 0.28, value_tradeoff: 0.2, strategy: 0.15 },
-  reaction: { task_friction: 0.18, public_pressure: 0.15, value_tradeoff: 0.15 },
-  argument: { evidence_claim: 0.35, public_pressure: 0.15 },
-  person_pattern: { person_pattern: 0.42, strategy: 0.18 },
-  comparison: { comparison: 0.42, public_pressure: 0.12 }
-};
-
-const SETTING_ROUTE_BIAS = {
-  private: {},
-  group: { public_pressure: 0.42, comparison: 0.12 },
-  debate: { public_pressure: 0.5, evidence_claim: 0.18 },
-  fiction: { person_pattern: 0.35, comparison: 0.2, strategy: 0.18 }
-};
-
-const KEYWORD_ROUTE_RULES = [
-  { route: 'body_need', weight: 0.78, rx: /\b(eat|food|meal|lunch|dinner|breakfast|hungry|hunger|thirst|drink|sleep|tired|pain|body|energy)\b/i },
-  { route: 'micro_action', weight: 0.64, rx: /\b(should i|should we|do i|do we|now|today|tonight|start|stop|go|leave|eat|work|choose|decision|decide)\b/i },
-  { route: 'task_friction', weight: 0.68, rx: /\b(procrastinat|avoid|avoiding|delay|delaying|stuck|friction|motivat|lazy|focus|adhd|distract|task)\b/i },
-  { route: 'public_pressure', weight: 0.78, rx: /\b(friend|friends|group|debate|argue|argument|prove|win|clout|score|compare results|audience|people watching|status)\b/i },
-  { route: 'comparison', weight: 0.7, rx: /\b(compare|comparison|versus|vs\.?|better than|stronger than|weaker than|which is better|between)\b/i },
-  { route: 'person_pattern', weight: 0.68, rx: /\b(character|person|leader|villain|hero|player|subject|behavior|pattern|under pressure)\b/i },
-  { route: 'evidence_claim', weight: 0.72, rx: /\b(true|false|fact|evidence|proof|claim|belief|source|study|data|counterexample|counter example|because)\b/i },
-  { route: 'policy_system', weight: 0.72, rx: /\b(policy|law|rule|system|government|institution|society|public|enforce|regulation|tax|school|company)\b/i },
-  { route: 'value_tradeoff', weight: 0.58, rx: /\b(fair|right|wrong|hurt|harm|help|cost|benefit|people|moral|duty|allow|ban|responsible)\b/i },
-  { route: 'strategy', weight: 0.54, rx: /\b(strategy|tactic|plan|win|game|incentive|tradeoff|risk|execute|method)\b/i },
-  { route: 'low_stakes', weight: 0.44, rx: /\b(silly|random|quick test|test only|whatever|minor|small|not serious|just testing)\b/i }
+const KEYWORD_LOAD_RULES = [
+  { key: 'micro', weight: 0.48, rx: /\b(should i|should we|do i|do we|now|today|tonight|eat|sleep|drink|hungry|tired|procrastinat|start|stop|quick|small|minor|lunch|food)\b/i },
+  { key: 'practical', weight: 0.26, rx: /\b(do|avoid|allow|ban|choose|decision|work|fix|plan|method|cost|time|money|enforce|execute)\b/i },
+  { key: 'causal', weight: 0.34, rx: /\b(came after|came before|cause|caused|origin|first|after|before|timeline|because|leads to|created|born|laid)\b/i },
+  { key: 'definitional', weight: 0.3, rx: /\b(counts as|meaning|define|definition|word|label|called|is a|are a|what is|egg|chicken)\b/i },
+  { key: 'evidential', weight: 0.3, rx: /\b(probably|proof|evidence|fact|true|false|source|data|study|example|counterexample|claim|belief)\b/i },
+  { key: 'moral', weight: 0.28, rx: /\b(fair|right|wrong|moral|harm|hurt|help|duty|deserve|responsible|good|bad)\b/i },
+  { key: 'social', weight: 0.32, rx: /\b(friend|friends|group|people|audience|public|clout|win|prove|debate|argue|argument|compare score|higher score)\b/i },
+  { key: 'comparative', weight: 0.34, rx: /\b(compare|versus|vs\.?|better than|stronger|weaker|which one|between|wins)\b/i },
+  { key: 'affective', weight: 0.2, rx: /\b(feel|feels|angry|sad|annoyed|worried|scared|disgust|like|hate|love)\b/i },
+  { key: 'playful', weight: 0.22, rx: /\b(silly|random|joke|meme|funny|just testing|not serious|whatever)\b/i },
+  { key: 'stakes', weight: 0.22, rx: /\b(serious|important|danger|risk|controversial|life|job|money|relationship|policy|law)\b/i },
+  { key: 'uncertainty', weight: 0.18, rx: /\b(probably|maybe|might|could|unsure|uncertain|guess|seems|i think)\b/i },
+  { key: 'score_pressure', weight: 0.28, rx: /\b(score|result|rank|clout|prove|win|higher number|compare results)\b/i }
 ];
 
 export function getMode(id) {
-  return MODES[id] ?? MODES.fast;
+  return MODES[id] || MODES.fast;
 }
 
 export function getScope(id) {
-  return SCOPES.find(scope => scope.id === id) ?? SCOPES[0];
+  return SCOPES.find(item => item.id === id) || SCOPES[0];
 }
 
 export function getSetting(id) {
-  return SETTINGS.find(item => item.id === id) ?? SETTINGS[0];
+  return SETTINGS.find(item => item.id === id) || SETTINGS[0];
 }
 
 export function getUICopy(modeId) {
@@ -77,684 +49,630 @@ export function getUICopy(modeId) {
 }
 
 export function getReadableText(card, modeId) {
-  const level = getMode(modeId).readingLevel === 'simple' ? 'simple' : 'normal';
-  return card[level] ?? card.normal;
+  return getMode(modeId).readingLevel === 'simple' ? (card.simple || card.normal) : (card.normal || card.simple);
 }
 
 export function getAnswerText(answer, modeId) {
-  const level = getMode(modeId).readingLevel === 'simple' ? 'simple' : 'normal';
-  return answer[level] ?? answer.normal;
+  return getMode(modeId).readingLevel === 'simple' ? (answer.simple || answer.normal) : (answer.normal || answer.simple);
 }
 
-export function analyzeScopeLabel(label = '', scope = 'claim', setting = 'private') {
-  const text = String(label || '').toLowerCase();
-  const raw = emptyRouteVector();
+export function quoteLabel(label, copy = UI_COPY.normal) {
+  const clean = String(label || '').trim();
+  return `“${clean || copy.noLabel || 'Untitled scope'}”`;
+}
+
+function zero(keys) {
+  return Object.fromEntries(keys.map(k => [k, 0]));
+}
+
+function clone(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
+function clamp(value, min = 0, max = 1) {
+  return Math.max(min, Math.min(max, Number(value) || 0));
+}
+
+function addVector(target, source = {}, scale = 1) {
+  for (const [key, value] of Object.entries(source || {})) {
+    if (typeof target[key] !== 'number') target[key] = 0;
+    target[key] += (Number(value) || 0) * scale;
+  }
+}
+
+function normalizeVector(vector, keys, floor = 0) {
+  const out = zero(keys);
+  let total = 0;
+  for (const key of keys) {
+    out[key] = Math.max(floor, Number(vector[key]) || 0);
+    total += out[key];
+  }
+  if (total <= 1e-9) {
+    const even = 1 / keys.length;
+    for (const key of keys) out[key] = even;
+    return out;
+  }
+  for (const key of keys) out[key] = out[key] / total;
+  return out;
+}
+
+function dot(a = {}, b = {}) {
+  let total = 0;
+  for (const [key, value] of Object.entries(a)) total += (Number(value) || 0) * (Number(b[key]) || 0);
+  return total;
+}
+
+function topEntries(vector, count = 4, labelMap = null) {
+  return Object.entries(vector)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, count)
+    .map(([key, value]) => ({ key, label: labelMap?.[key]?.label || key.replace(/_/g, '-'), value: round(value, 3) }));
+}
+
+function round(value, digits = 6) {
+  return Number((Number(value) || 0).toFixed(digits));
+}
+
+export function analyzeScopeLabel(label = '', scopeId = 'claim', settingId = 'private') {
+  const text = String(label || '');
+  const lower = text.toLowerCase();
+  const loadSeed = zero(LOADS);
   const hits = [];
 
-  addRouteBias(raw, SCOPE_ROUTE_BIAS[scope] || {}, 'scope');
-  addRouteBias(raw, SETTING_ROUTE_BIAS[setting] || {}, 'setting');
+  addVector(loadSeed, getScope(scopeId).bias, 1);
+  addVector(loadSeed, getSetting(settingId).bias, 1);
 
-  for (const rule of KEYWORD_ROUTE_RULES) {
-    if (rule.rx.test(text)) {
-      raw[rule.route] += rule.weight;
-      hits.push(`${rule.route}+${rule.weight.toFixed(2)}`);
+  for (const rule of KEYWORD_LOAD_RULES) {
+    if (rule.rx.test(lower)) {
+      loadSeed[rule.key] += rule.weight;
+      hits.push(`${rule.key}+${rule.weight.toFixed(2)}`);
     }
   }
 
-  const wordCount = text.split(/\s+/).filter(Boolean).length;
-  if (wordCount <= 3) {
-    raw.low_stakes += 0.22;
-    hits.push('low_stakes+0.22');
+  const wordCount = lower.split(/\s+/).filter(Boolean).length;
+  if (wordCount <= 4) {
+    loadSeed.playful += 0.08;
+    loadSeed.uncertainty += 0.04;
+    hits.push('short_scope+0.12');
   }
-  if (/[?]/.test(label)) {
-    raw.micro_action += 0.08;
-    raw.uncertainty = (raw.uncertainty || 0) + 0.1;
+  if (/[?]/.test(text)) {
+    loadSeed.uncertainty += 0.08;
+    hits.push('question+0.08');
   }
-  if (/\bshould\b/i.test(text) && /\bnow\b/i.test(text)) raw.micro_action += 0.18;
-  if (raw.body_need > 0.25 && raw.task_friction > 0.25) raw.micro_action += 0.25;
-  if (raw.public_pressure > 0.3 && raw.comparison > 0.25) raw.score_risk = 0.35;
 
-  const route = normalizeRoute(raw);
-  const confidence = routeConfidence(route);
+  const loads = normalizeVector(loadSeed, LOADS, 0.01);
   return {
-    route,
-    confidence,
+    loads,
+    confidence: concentration(loads),
+    top: topEntries(loads, 5),
     hits,
-    top: topRoutes(route, 4),
-    word_count: wordCount,
-    note: confidence < 0.34 ? 'wide route; first card should narrow it' : 'route seeded from scope label and selected setting'
+    word_count: wordCount
   };
 }
 
-function addRouteBias(target, bias, source) {
-  for (const [route, value] of Object.entries(bias || {})) {
-    if (route in target) target[route] += value;
-  }
+function concentration(vector = {}) {
+  const values = Object.values(vector).sort((a, b) => b - a);
+  if (!values.length) return 0;
+  return clamp((values[0] - (values[2] || 0)) * 2.4 + values[0] * 0.8, 0, 1);
 }
 
-export function makeInitialState({ modeId, scope, setting = 'private', claim }) {
-  const cleanClaim = String(claim || '').trim();
-  const analysis = analyzeScopeLabel(cleanClaim, scope, setting);
-  const maxCards = getMode(modeId).maxCards;
+export function makeInitialState({ modeId = 'fast', scope = 'claim', setting = 'private', claim = '' } = {}) {
+  const route = analyzeScopeLabel(claim, scope, setting);
   const state = {
     repo: '42ndMirror',
-    version: '0.4.0-deterministic-router',
     modeId,
     scope,
     setting,
-    claim: cleanClaim,
-    label: cleanClaim,
-    maxCards,
+    claim: String(claim || '').trim(),
+    maxCards: getMode(modeId).maxCards,
     askedCardIds: [],
     answers: [],
-    routeVector: analysis.route,
-    routeAnalysis: analysis,
-    routeLog: [{ step: 0, type: 'seed', route: clone(analysis.route), top: analysis.top, confidence: analysis.confidence, hits: analysis.hits }],
+    loads: clone(route.loads),
+    coverage: zero(AXES),
+    axes: zero(AXES),
+    gates: zero(GATE_IDS),
+    quality: {},
+    pressureVector: zero(PRESSURE_IDS),
+    pressureLog: [],
+    routeLog: [{ step: 0, type: 'seed', loads: clone(route.loads), top: route.top, confidence: route.confidence, hits: route.hits }],
     selectionLog: [],
+    currentSelection: null,
     startedAt: Date.now(),
     lastCardAt: Date.now(),
-    timing: []
+    timing: [],
+    pressureTarget: null,
+    balancedRun: 0
   };
+
+  seedPressureFromLoads(state);
+  updatePressureTarget(state);
   return state;
+}
+
+function seedPressureFromLoads(state) {
+  const p = state.pressureVector;
+  p.proof_cost += (state.loads.evidential || 0) * 0.3 + (state.loads.causal || 0) * 0.16 + (state.loads.definitional || 0) * 0.1;
+  p.context_cost += (state.loads.definitional || 0) * 0.22 + (state.loads.comparative || 0) * 0.18 + (state.loads.uncertainty || 0) * 0.16;
+  p.person_cost += (state.loads.moral || 0) * 0.24 + (state.loads.social || 0) * 0.14 + (state.loads.consequence || 0) * 0.12;
+  p.constraint_cost += (state.loads.practical || 0) * 0.22 + (state.loads.micro || 0) * 0.14 + (state.loads.consequence || 0) * 0.12;
 }
 
 export function getNextCard(state) {
   if (!state || state.askedCardIds.length >= state.maxCards) return null;
   if (shouldStopEarly(state)) return null;
-  const totals = computeTotalsSoFar(state);
+
   const candidates = CARD_BANK.filter(card => isCandidateCompatible(card, state));
   if (!candidates.length) return null;
 
-  const ranked = candidates.map(card => scoreCard(card, state, totals)).sort((a, b) => b.total - a.total);
-  const selected = ranked[0];
-  if (isLowRelevanceTail(state, selected)) return null;
-  const logItem = makeSelectionLogItem(state, selected, ranked.slice(0, 4));
-  state.currentSelection = logItem;
+  const scored = candidates.map(card => scoreCard(card, state)).sort((a, b) => b.total - a.total);
+  const selected = scored[0];
+  state.currentSelection = makeSelectionLog(selected, scored.slice(0, 4), state);
   return selected.card;
 }
 
-
 function shouldStopEarly(state) {
-  const asked = state.askedCardIds.length;
-  if (asked < 3) return false;
-  if (state.askedCardIds.includes('precision_close_01')) return true;
-  const microMass = (state.routeVector.micro_action || 0) + (state.routeVector.body_need || 0) + (state.routeVector.task_friction || 0);
-  if (microMass >= 0.58 && state.askedCardIds.includes('micro_next_step_01')) return true;
-  if ((state.routeVector.low_stakes || 0) > 0.32 && asked >= 4) return true;
-  return false;
-}
-
-function isLowRelevanceTail(state, selected) {
-  if (state.askedCardIds.length < 4) return false;
-  if (!selected) return true;
-  if (selected.card.id === 'precision_close_01') return false;
-  if ((selected.raw.routeFit || 0) < 0.12) return true;
-  if (selected.total < 0.24) return true;
-  const microMass = (state.routeVector.micro_action || 0) + (state.routeVector.body_need || 0) + (state.routeVector.task_friction || 0);
-  if (microMass >= 0.55 && !['micro_body_state_01', 'micro_delay_cost_01', 'micro_next_step_01', 'precision_close_01'].includes(selected.card.id)) return true;
+  const n = state.askedCardIds.length;
+  if (n < 4) return false;
+  if (state.askedCardIds.includes('final_commitment_01')) return true;
+  const microMass = (state.loads.micro || 0) + (state.loads.practical || 0) * 0.45 + (state.loads.playful || 0) * 0.35;
+  const heavyMass = (state.loads.moral || 0) + (state.loads.social || 0) + (state.loads.stakes || 0) + (state.loads.score_pressure || 0);
+  if (microMass > 0.48 && heavyMass < 0.35 && n >= 5) return true;
+  if ((state.quality.low_stakes || 0) >= 2 && n >= 5) return true;
   return false;
 }
 
 function isCandidateCompatible(card, state) {
   if (state.askedCardIds.includes(card.id)) return false;
-  if (Array.isArray(card.settings) && !card.settings.includes(state.setting)) return false;
-  if (card.fixedEarly && state.askedCardIds.length > 0) return false;
-  if (card.fixedEarly && routeConfidence(state.routeVector) >= 0.5) return false;
-  const lateFloor = card.id === 'precision_close_01' ? Math.max(3, state.maxCards - 4) : Math.max(3, state.maxCards - 3);
-  if (card.stage === 'late' && state.askedCardIds.length < lateFloor) return false;
-  if (card.stage === 'mid' && state.askedCardIds.length < 1) return false;
+  const n = state.askedCardIds.length;
+  if (card.fixedFirst && n !== 0) return false;
+  if (!card.fixedFirst && n === 0) return false;
+  if (card.stage === 'mid' && n < 1) return false;
+  if (card.pressureCard && n < 3) return false;
+  const lateFloor = Math.max(4, state.maxCards - 3);
+  if (card.stage === 'late' && n < lateFloor) return false;
+  if (card.id === 'score_pressure_01') {
+    const socialMass = (state.loads.social || 0) + (state.loads.score_pressure || 0);
+    if (socialMass < 0.14 && state.setting === 'private') return false;
+  }
+  if (card.pressureCard && state.pressureTarget && card.pressureCard !== state.pressureTarget) {
+    return false;
+  }
   return true;
 }
 
-function scoreCard(card, state, totals) {
-  const askedCount = state.askedCardIds.length;
-  const maxCards = state.maxCards;
-  const routeFit = dot(card.routes || {}, state.routeVector);
-  const needFit = coverageNeedScore(card, totals.coverage);
-  const gateFit = gateNeedScore(card, totals.gates);
-  const stageFit = stageScore(card.stage, askedCount, maxCards);
-  const settingFit = Array.isArray(card.settings) && card.settings.includes(state.setting) ? 0.12 : 0;
-  const fixedEarly = card.fixedEarly && routeConfidence(state.routeVector) < 0.5 ? 0.2 : 0;
-  const lowStakesPenalty = state.routeVector.low_stakes > 0.28 && ['opposition_best_01', 'policy_load_01', 'character_power_01'].includes(card.id) ? -0.35 : 0;
-  const microMass = (state.routeVector.micro_action || 0) + (state.routeVector.body_need || 0) + (state.routeVector.task_friction || 0);
-  const microTailPenalty = microMass >= 0.58 && !['micro_body_state_01', 'micro_delay_cost_01', 'micro_next_step_01', 'precision_close_01'].includes(card.id) ? -0.18 : 0;
+function scoreCard(card, state) {
+  const n = state.askedCardIds.length;
+  const stageFit = stageScore(card.stage, n, state.maxCards);
+  const routeFit = dot(card.routes || {}, state.loads);
+  const pressureFit = scorePressureFit(card, state);
+  const gapFit = coverageGapFit(card, state);
+  const gateFit = gateNeedFit(card, state);
+  const stage = stageFit;
+  const penalty = repeatFamilyPenalty(card, state) + scopeMismatchPenalty(card, state);
+  const total =
+    routeFit * ROUTING_WEIGHTS.route +
+    pressureFit * ROUTING_WEIGHTS.pressure +
+    gapFit * ROUTING_WEIGHTS.gap +
+    gateFit * ROUTING_WEIGHTS.gate +
+    stage * ROUTING_WEIGHTS.stage -
+    penalty;
 
-  const total = routeFit * 0.54 + needFit * 0.22 + gateFit * 0.12 + stageFit * 0.08 + settingFit + fixedEarly + lowStakesPenalty + microTailPenalty;
   return {
     card,
-    total: round6(total),
+    total: round(total),
     parts: {
-      route: round6(routeFit * 0.54),
-      deficit: round6(needFit * 0.22),
-      gate: round6(gateFit * 0.12),
-      stage: round6(stageFit * 0.08),
-      setting: round6(settingFit),
-      fixed: round6(fixedEarly),
-      penalty: round6(lowStakesPenalty + microTailPenalty)
+      route: round(routeFit * ROUTING_WEIGHTS.route),
+      pressure: round(pressureFit * ROUTING_WEIGHTS.pressure),
+      gap: round(gapFit * ROUTING_WEIGHTS.gap),
+      gate: round(gateFit * ROUTING_WEIGHTS.gate),
+      stage: round(stage * ROUTING_WEIGHTS.stage),
+      penalty: round(penalty)
     },
-    raw: { routeFit: round6(routeFit), needFit: round6(needFit), gateFit: round6(gateFit), stageFit: round6(stageFit) }
+    raw: { routeFit: round(routeFit), pressureFit: round(pressureFit), gapFit: round(gapFit), gateFit: round(gateFit), stageFit: round(stage) }
   };
 }
 
-function coverageNeedScore(card, coverage) {
-  const dimensionsFromAnswers = summarizeCardCoverage(card);
-  let score = 0;
-  let total = 0;
-  for (const axis of AXES) {
-    const cardTouch = dimensionsFromAnswers[axis] || 0;
-    const deficit = clamp(1 - (coverage[axis] || 0) / 1.4, 0, 1);
-    score += cardTouch * deficit;
-    total += cardTouch;
-  }
-  return total ? score / total : 0;
+function scorePressureFit(card, state) {
+  let base = dot(card.pressures || {}, normalizeVector(state.pressureVector, PRESSURE_IDS, 0.01));
+  if (state.pressureTarget && card.pressureCard === state.pressureTarget) base += 0.72;
+  if (state.pressureTarget && card.pressures?.[state.pressureTarget]) base += card.pressures[state.pressureTarget] * 0.25;
+  return base;
 }
 
-function summarizeCardCoverage(card) {
-  const out = Object.fromEntries(AXES.map(axis => [axis, 0]));
-  for (const answer of card.answers || []) {
-    const coverage = answer.effects?.coverage || {};
-    for (const axis of AXES) out[axis] += Math.max(0, coverage[axis] || 0);
-  }
-  for (const axis of AXES) out[axis] = Math.min(1, out[axis] / Math.max(1, (card.answers || []).length / 2));
-  return out;
+function coverageGapFit(card, state) {
+  const axisNeeds = axisDeficits(state);
+  const cardAxis = cardPotentialAxes(card);
+  return dot(axisNeeds, cardAxis);
 }
 
-function gateNeedScore(card, gates) {
-  const answerGates = {};
-  for (const id of GATE_IDS) answerGates[id] = 0;
-  for (const answer of card.answers || []) {
-    const gateEffects = answer.effects?.gates || {};
-    for (const id of GATE_IDS) answerGates[id] += Math.abs(gateEffects[id] || 0);
-  }
-  let score = 0;
-  let total = 0;
-  for (const id of GATE_IDS) {
-    const touch = Math.min(1, answerGates[id] / 1.5);
-    const need = clamp(1 - Math.abs(gates[id] || 0) / 1.2, 0, 1);
-    score += touch * need;
-    total += touch;
-  }
-  return total ? score / total : 0;
+function gateNeedFit(card, state) {
+  const needs = {};
+  for (const gate of GATE_IDS) needs[gate] = clamp(0.55 - (state.gates[gate] || 0), 0, 1);
+  return dot(needs, card.gates || {});
 }
 
-function stageScore(stage, askedCount, maxCards) {
-  const progress = askedCount / Math.max(1, maxCards - 1);
-  if (stage === 'early') return clamp(1 - progress * 1.2, 0, 1);
-  if (stage === 'mid') return 1 - Math.abs(progress - 0.5) * 1.4;
-  if (stage === 'late') return clamp((progress - 0.48) * 1.8, 0, 1);
+function cardPotentialAxes(card) {
+  const out = zero(AXES);
+  for (const answer of card.answers || []) addVector(out, answer.effects?.axes, 1 / (card.answers.length || 1));
+  return normalizeVector(out, AXES, 0);
+}
+
+function axisDeficits(state) {
+  const out = zero(AXES);
+  for (const axis of AXES) out[axis] = clamp(0.55 - (state.coverage[axis] || 0), 0, 1);
+  const asym = currentAsymmetry(state);
+  if (asym?.oppositeAxis) out[asym.oppositeAxis] += 0.55;
+  return normalizeVector(out, AXES, 0.01);
+}
+
+function repeatFamilyPenalty(card, state) {
+  if (!card.pressureCard) return 0;
+  const askedPressureCards = state.askedCardIds
+    .map(id => CARD_BANK.find(card => card.id === id)?.pressureCard)
+    .filter(Boolean);
+  return askedPressureCards.includes(card.pressureCard) ? 0.24 : 0;
+}
+
+function scopeMismatchPenalty(card, state) {
+  if (card.id === 'micro_live_constraint_01') {
+    const micro = (state.loads.micro || 0) + (state.loads.playful || 0);
+    return micro < 0.14 ? 0.22 : 0;
+  }
+  if (card.id === 'score_pressure_01') {
+    const social = (state.loads.social || 0) + (state.loads.score_pressure || 0);
+    return social < 0.18 ? 0.28 : 0;
+  }
+  return 0;
+}
+
+function stageScore(stage, n, max) {
+  const progress = max <= 1 ? 1 : n / (max - 1);
+  if (stage === 'early') return clamp(1 - Math.abs(progress - 0.18) * 2.2, 0, 1);
+  if (stage === 'mid') return clamp(1 - Math.abs(progress - 0.52) * 2.0, 0, 1);
+  if (stage === 'late') return clamp(1 - Math.abs(progress - 0.86) * 2.4, 0, 1);
   return 0.5;
 }
 
-function makeSelectionLogItem(state, selected, topRanked) {
+function makeSelectionLog(selected, top, state) {
   return {
     step: state.askedCardIds.length + 1,
-    selected_card_id: selected.card.id,
+    selected: selected.card.id,
     selected_title: selected.card.normal?.title || selected.card.id,
+    pressure_target: state.pressureTarget,
+    formula: 'S=.44R+.26P+.16C+.08G+.06T-penalty',
     score: selected.total,
     parts: selected.parts,
-    formula: 'S = .54R + .22D + .12G + .08T + setting + fixed - penalty',
-    top_routes: topRoutes(state.routeVector, 5),
-    top_candidates: topRanked.map(item => ({ id: item.card.id, score: item.total, routeFit: item.raw.routeFit }))
+    raw: selected.raw,
+    top: top.map(item => ({ id: item.card.id, score: item.total, parts: item.parts }))
   };
 }
 
-export function answerCard(state, card, answer) {
+export function recordAnswer(state, card, answer) {
   const now = Date.now();
-  const elapsedMs = Math.max(0, now - state.lastCardAt);
-  const before = clone(state.routeVector);
-
-  state.answers.push({
-    cardId: card.id,
-    answerId: answer.id,
-    elapsedMs,
-    effects: clone(answer.effects || {}),
-    route: clone(answer.route || {})
-  });
-  state.askedCardIds.push(card.id);
-  state.timing.push(elapsedMs);
+  const elapsedMs = now - (state.lastCardAt || now);
   state.lastCardAt = now;
 
-  state.routeVector = updateRouteVector(state.routeVector, answer.route || {}, card.routes || {});
-  const delta = routeDelta(before, state.routeVector);
-  const routeLogItem = { step: state.answers.length, type: 'answer_update', card: card.id, answer: answer.id, delta, route: clone(state.routeVector), top: topRoutes(state.routeVector, 5) };
-  state.routeLog.push(routeLogItem);
-  if (state.currentSelection) {
-    state.selectionLog.push({ ...state.currentSelection, answer: answer.id, route_delta: delta });
-    state.currentSelection = null;
-  }
+  const effects = answer.effects || {};
+  state.askedCardIds.push(card.id);
+  state.timing.push({ card_id: card.id, elapsed_ms: elapsedMs });
+
+  const beforeLoads = clone(state.loads);
+  const beforePressure = clone(state.pressureVector);
+  const beforeAsymmetry = currentAsymmetry(state);
+
+  addVector(state.axes, effects.axes, 1);
+  addVector(state.coverage, effects.axes, 0.75);
+  addVector(state.loads, effects.loads, 0.9);
+  state.loads = normalizeVector(state.loads, LOADS, 0.005);
+  addVector(state.gates, effects.gates, 1);
+  for (const gate of GATE_IDS) state.gates[gate] = clamp(state.gates[gate], -1.2, 1.2);
+  addVector(state.quality, effects.quality, 1);
+  addVector(state.pressureVector, effects.pressureNext, 1);
+  nudgeOppositePressureFromAnswer(state, effects.axes || {});
+
+  const pressureEvent = classifyPressureResponse(state, card, answer, beforeAsymmetry);
+  if (pressureEvent) state.pressureLog.push(pressureEvent);
+
+  updateBalanceRun(state);
+  updatePressureTarget(state);
+
+  const answerLog = {
+    step: state.answers.length + 1,
+    card_id: card.id,
+    answer_id: answer.id,
+    answer_label: answer.normal?.main || answer.id,
+    elapsed_ms: elapsedMs,
+    before_loads: beforeLoads,
+    after_loads: clone(state.loads),
+    before_pressure: beforePressure,
+    after_pressure: clone(state.pressureVector),
+    pressure_event: pressureEvent
+  };
+
+  state.answers.push(answerLog);
+  state.routeLog.push({
+    step: state.answers.length,
+    type: 'answer',
+    answer: answer.id,
+    loads_top: topEntries(state.loads, 5),
+    pressure_top: topEntries(normalizeVector(state.pressureVector, PRESSURE_IDS, 0.01), 4, PRESSURES),
+    pressure_target: state.pressureTarget,
+    asymmetry: currentAsymmetry(state),
+    gates: clone(state.gates),
+    quality: clone(state.quality)
+  });
+
+  if (state.currentSelection) state.selectionLog.push(state.currentSelection);
+  state.currentSelection = null;
   return state;
 }
 
-function updateRouteVector(current, answerRoute, cardRoute) {
-  const next = { ...current };
-  for (const [route, value] of Object.entries(cardRoute || {})) {
-    if (route in next) next[route] += value * 0.035;
+function updateBalanceRun(state) {
+  const vals = AXES.map(axis => state.axes[axis] || 0);
+  const max = Math.max(...vals);
+  const min = Math.min(...vals);
+  if (max > 0.25 && max - min < 0.2) state.balancedRun += 1;
+  else state.balancedRun = Math.max(0, state.balancedRun - 1);
+  if (state.balancedRun >= 2) {
+    state.loads.uncertainty += 0.06;
+    state.loads.social += (state.loads.score_pressure || 0) > 0.07 ? 0.05 : 0;
+    state.quality.smooth_balance_pattern = (state.quality.smooth_balance_pattern || 0) + 0.2;
   }
-  for (const [route, value] of Object.entries(answerRoute || {})) {
-    if (route in next) next[route] += value;
-  }
-  return normalizeRoute(next);
 }
 
-function routeDelta(before, after) {
-  return topRoutes(Object.fromEntries(ROUTES.map(route => [route, (after[route] || 0) - (before[route] || 0)])), 4, true);
+function nudgeOppositePressureFromAnswer(state, axisEffects = {}) {
+  const e = Number(axisEffects.empathy || 0);
+  const p = Number(axisEffects.practicality || 0);
+  const w = Number(axisEffects.wisdom || 0);
+  const k = Number(axisEffects.knowledge || 0);
+  if (e > p + 0.1) state.pressureVector.constraint_cost += (e - p) * 0.36;
+  if (p > e + 0.1) state.pressureVector.person_cost += (p - e) * 0.36;
+  if (w > k + 0.1) state.pressureVector.proof_cost += (w - k) * 0.36;
+  if (k > w + 0.1) state.pressureVector.context_cost += (k - w) * 0.36;
 }
 
-export function getRoutingSnapshot(state) {
-  const totals = computeTotalsSoFar(state);
-  const next = state.currentSelection || (getNextCard(state), state.currentSelection);
-  return {
-    route: clone(state.routeVector),
-    top_routes: topRoutes(state.routeVector, 5),
-    coverage: summarizeCoverage(totals.coverage),
-    gates: summarizeGates(totals.gates),
-    selection: next,
-    recent_route_log: state.routeLog.slice(-3)
+function classifyPressureResponse(state, card, answer, beforeAsymmetry) {
+  if (!card.pressureCard && !answer.effects?.pressureResponse) return null;
+  const response = answer.effects?.pressureResponse || 'unknown';
+  const target = card.pressureCard || state.pressureTarget || null;
+  const event = {
+    card_id: card.id,
+    target,
+    response,
+    previous_asymmetry: beforeAsymmetry,
+    impact: pressureImpact(response)
   };
+  if (response === 'integrate') {
+    state.gates.counter_consideration += 0.08;
+    state.gates.contradiction_handling += 0.06;
+    state.quality.pressure_integrated = (state.quality.pressure_integrated || 0) + 1;
+  } else if (response === 'principled_reject') {
+    state.gates.counter_consideration += 0.06;
+    state.gates.reality_contact += 0.04;
+    state.quality.asymmetry_survived = (state.quality.asymmetry_survived || 0) + 1;
+  } else if (response === 'dismiss') {
+    state.gates.counter_consideration -= 0.05;
+    state.gates.non_sealing -= 0.07;
+    state.quality.pressure_dismissed = (state.quality.pressure_dismissed || 0) + 1;
+  } else if (response === 'dodge') {
+    state.gates.reality_contact -= 0.08;
+    state.gates.contradiction_handling -= 0.08;
+    state.quality.pressure_dodged = (state.quality.pressure_dodged || 0) + 1;
+  }
+  return event;
 }
 
-function computeTotalsSoFar(state) {
-  const totals = emptyTotals();
-  applySettingPressure(totals, state.setting);
-  if (state.routeAnalysis?.confidence < 0.28) totals.quality.needs_disambiguation += 0.5;
-  if ((state.routeVector.low_stakes || 0) > 0.28) totals.quality.low_stakes += 0.7;
-  for (const item of state.answers) applyEffects(totals, item.effects || {});
-  applyMetaSignals(totals, state);
-  return totals;
-}
-
-export function calculateResult(state) {
-  const totals = computeTotalsSoFar(state);
-  const gateSummary = summarizeGates(totals.gates);
-  const coverage = summarizeCoverage(totals.coverage);
-  const quality = summarizeQuality(totals.quality, state.timing, state.answers.length, coverage, gateSummary, state);
-
-  const lateralScale = computeLateralScale(state, coverage);
-  let xRaw = round6((totals.empathy - totals.practicality) / lateralScale);
-  let zRaw = round6((totals.wisdom - totals.knowledge) / lateralScale);
-  let yRaw = round6(computeYRaw(gateSummary, quality, coverage));
-
-  const adjusted = applyQualityCaps({ x: xRaw, y: yRaw, z: zRaw }, quality, coverage, totals, state);
-  xRaw = adjusted.x;
-  yRaw = adjusted.y;
-  zRaw = adjusted.z;
-
-  const projected = projectToOctahedronSurface({ x: xRaw, y: yRaw, z: zRaw });
-  const interpretation = buildInterpretation(projected, totals, gateSummary, quality, coverage, state);
-  const label = getResultLabel(state);
-  const id = makeResultId();
-  const entryText = makeEntryText(label, projected, quality, interpretation);
-
+function pressureImpact(response) {
   return {
-    id,
-    repo: state.repo,
-    version: state.version,
-    created_at: new Date().toISOString(),
-    mode: state.modeId,
-    mode_label: getMode(state.modeId).name,
-    scope: state.scope,
-    scope_label: getScope(state.scope).name,
-    setting: state.setting,
-    setting_label: getSetting(state.setting).name,
+    integrate: 'missing load included',
+    principled_reject: 'asymmetry retained after pressure',
+    dismiss: 'pressure dismissed with weaker accounting',
+    dodge: 'pressure avoided or appearance-managed'
+  }[response] || 'recorded';
+}
+
+function updatePressureTarget(state) {
+  const asym = currentAsymmetry(state);
+  const pressureNorm = normalizeVector(state.pressureVector, PRESSURE_IDS, 0.01);
+  let target = topEntries(pressureNorm, 1)[0]?.key || null;
+
+  if (asym && asym.magnitude >= 0.18 && !recentlyPressed(state, asym.oppositePressure)) {
+    target = asym.oppositePressure;
+  }
+
+  if ((state.quality.low_stakes || 0) > 1.8 && state.askedCardIds.length >= 3) {
+    target = null;
+  }
+
+  state.pressureTarget = target;
+}
+
+function recentlyPressed(state, pressureId) {
+  if (!pressureId) return false;
+  const recent = state.askedCardIds.slice(-2);
+  return recent.some(id => CARD_BANK.find(card => card.id === id)?.pressureCard === pressureId);
+}
+
+function currentAsymmetry(state) {
+  const e = state.axes.empathy || 0;
+  const p = state.axes.practicality || 0;
+  const w = state.axes.wisdom || 0;
+  const k = state.axes.knowledge || 0;
+  const ep = e - p;
+  const wk = w - k;
+  const candidates = [
+    ep > 0 ? { axis: 'empathy', oppositeAxis: 'practicality', oppositePressure: 'constraint_cost', magnitude: Math.abs(ep), pair: 'empathy/practicality' } : { axis: 'practicality', oppositeAxis: 'empathy', oppositePressure: 'person_cost', magnitude: Math.abs(ep), pair: 'empathy/practicality' },
+    wk > 0 ? { axis: 'wisdom', oppositeAxis: 'knowledge', oppositePressure: 'proof_cost', magnitude: Math.abs(wk), pair: 'wisdom/knowledge' } : { axis: 'knowledge', oppositeAxis: 'wisdom', oppositePressure: 'context_cost', magnitude: Math.abs(wk), pair: 'wisdom/knowledge' }
+  ];
+  const top = candidates.sort((a, b) => b.magnitude - a.magnitude)[0];
+  if (!top || top.magnitude < 0.08) return null;
+  return top;
+}
+
+export function finalizeProfile(state) {
+  const axesRaw = clone(state.axes);
+  const gateScore = weightedGateScore(state.gates);
+  const quality = qualityAdjustment(state);
+  const yRaw = clamp(gateScore + quality.yBonus - quality.yPenalty, -1, 1);
+
+  let xRaw = (axesRaw.empathy || 0) - (axesRaw.practicality || 0);
+  let zRaw = (axesRaw.wisdom || 0) - (axesRaw.knowledge || 0);
+
+  const asymmetry = currentAsymmetry(state);
+  const pressureSummary = summarizePressure(state);
+
+  if (pressureSummary.integrated + pressureSummary.survived === 0 && asymmetry?.magnitude > 0.35) {
+    // Asymmetry that never saw pressure should remain more tentative.
+    xRaw *= 0.85;
+    zRaw *= 0.85;
+  }
+  if ((state.quality.low_stakes || 0) > 1.8) {
+    xRaw *= 0.75;
+    zRaw *= 0.75;
+  }
+
+  const coordinates = projectToOctahedron({ x: xRaw, y: yRaw, z: zRaw });
+  const surfaceCheck = Math.abs(coordinates.x) + Math.abs(coordinates.y) + Math.abs(coordinates.z);
+  const signalQuality = signalQualityGrade(state, quality, pressureSummary);
+  const result = {
+    repo: '42ndMirror',
     claim: state.claim,
-    quoted_label: label,
+    quoted_scope: quoteLabel(state.claim, getUICopy(state.modeId)),
+    mode: state.modeId,
+    scope: state.scope,
+    setting: state.setting,
+    coordinates,
+    surface_check: round(surfaceCheck, 6),
     axis_convention: AXIS_CONVENTION,
-    coordinates: {
-      x: projected.x,
-      y: projected.y,
-      z: projected.z,
-      surface_check: round6(Math.abs(projected.x) + Math.abs(projected.y) + Math.abs(projected.z)),
-      raw: { x: xRaw, y: yRaw, z: zRaw },
-      projection_note: projected.note
-    },
-    visualizer_payload: {
-      type: 'set-profile',
-      data: { data: { point: { x: projected.x, y: projected.y, z: projected.z } } }
-    },
-    components: {
-      empathy: round6(totals.empathy),
-      practicality: round6(totals.practicality),
-      wisdom: round6(totals.wisdom),
-      knowledge: round6(totals.knowledge)
-    },
-    coverage,
-    gates: gateSummary,
-    signal_quality: quality,
-    interpretation,
-    routing: {
-      initial_analysis: state.routeAnalysis,
-      final_route: clone(state.routeVector),
-      top_routes: topRoutes(state.routeVector, 6),
-      selected_cards: state.askedCardIds,
-      route_log: state.routeLog,
-      selection_log: state.selectionLog,
-      route_specificity: computeRouteSpecificitySeries(state.selectionLog)
-    },
-    entry_text: entryText,
-    selected_answers: state.answers.map(item => ({ card_id: item.cardId, answer_id: item.answerId, elapsed_ms: item.elapsedMs }))
+    raw: { x: round(xRaw, 6), y: round(yRaw, 6), z: round(zRaw, 6) },
+    axes_raw: Object.fromEntries(Object.entries(axesRaw).map(([k, v]) => [k, round(v, 6)])),
+    gates: Object.fromEntries(Object.entries(state.gates).map(([k, v]) => [k, round(v, 6)])),
+    loads_top: topEntries(state.loads, 6),
+    pressure: pressureSummary,
+    quality_flags: clone(state.quality),
+    signal_quality: signalQuality,
+    interpretation: buildInterpretation(coordinates, signalQuality, pressureSummary, state),
+    visualizer_payload: { type: 'set-profile', data: { data: { point: coordinates } } },
+    route_log: clone(state.routeLog),
+    selection_log: clone(state.selectionLog),
+    answers: clone(state.answers),
+    created_at: new Date().toISOString()
   };
+  return result;
 }
 
-function emptyTotals() {
-  const gates = Object.fromEntries(GATE_IDS.map(id => [id, 0]));
-  const quality = Object.fromEntries(QUALITY_KEYS.map(key => [key, 0]));
-  const coverage = Object.fromEntries(AXES.map(axis => [axis, 0]));
-  return { empathy: 0, practicality: 0, wisdom: 0, knowledge: 0, gates, quality, coverage };
-}
-
-function applySettingPressure(totals, setting) {
-  if (setting === 'group') totals.quality.social_performance_pressure += 0.4;
-  if (setting === 'debate') totals.quality.social_performance_pressure += 0.8;
-  if (setting === 'fiction') totals.quality.provisional_sample += 0.2;
-}
-
-function applyEffects(totals, effects) {
-  for (const axis of AXES) if (Number.isFinite(effects[axis])) totals[axis] += effects[axis];
-  for (const [id, value] of Object.entries(effects.gates || {})) if (id in totals.gates && Number.isFinite(value)) totals.gates[id] += value;
-  for (const [key, value] of Object.entries(effects.quality || {})) {
-    if (!Number.isFinite(totals.quality[key])) totals.quality[key] = 0;
-    if (Number.isFinite(value)) totals.quality[key] += value;
+function weightedGateScore(gates) {
+  let total = 0;
+  let weight = 0;
+  for (const gate of GATE_IDS) {
+    const w = GATE_WEIGHTS[gate] || 1;
+    total += clamp(gates[gate] || 0, -1, 1) * w;
+    weight += w;
   }
-  for (const [axis, value] of Object.entries(effects.coverage || {})) if (axis in totals.coverage && Number.isFinite(value)) totals.coverage[axis] += value;
+  return weight ? clamp(total / weight, -1, 1) : 0;
 }
 
-function applyMetaSignals(totals, state) {
-  const answers = state.answers.map(item => item.answerId);
-  const allComponents = [totals.empathy, totals.practicality, totals.wisdom, totals.knowledge];
-  const max = Math.max(...allComponents);
-  const min = Math.min(...allComponents);
-  const spread = max - min;
-  const total = allComponents.reduce((a, b) => a + b, 0);
-
-  if (answers.includes('score_as_badge')) totals.quality.score_badge_pressure += 1.2;
-  if (answers.includes('rerun_until_better')) totals.quality.answer_shopping_signal += 1.2;
-  if (answers.includes('compare_appeal')) totals.quality.taste_sample += 0.7;
-  if (answers.includes('tiny_stakes') || answers.includes('drop_the_scope') || answers.includes('little_changes')) totals.quality.low_stakes += 0.6;
-  if (total >= 4.8 && spread <= 0.48 && (totals.quality.precision_signal || 0) < 1.5) {
-    totals.quality.polished_neutrality_signal += 0.7;
-    totals.gates.G4_contradiction_handling -= 0.1;
-    totals.gates.G6_non_self_sealing -= 0.1;
-  }
-
-  if ((state.routeVector.public_pressure || 0) > 0.35 && state.setting !== 'private') totals.quality.social_performance_pressure += 0.45;
+function qualityAdjustment(state) {
+  const q = state.quality || {};
+  const yBonus =
+    (q.high_signal || 0) * 0.04 +
+    (q.pressure_integrated || 0) * 0.035 +
+    (q.asymmetry_survived || 0) * 0.03 +
+    (q.score_pressure_handled || 0) * 0.025;
+  const yPenalty =
+    (q.score_badge_pressure || 0) * 0.08 +
+    (q.answer_shopping_risk || 0) * 0.07 +
+    (q.polished_neutrality || 0) * 0.055 +
+    (q.pressure_dodged || 0) * 0.06 +
+    (q.pressure_dismissed || 0) * 0.035 +
+    (q.possible_dodge || 0) * 0.04 +
+    (q.low_signal || 0) * 0.04;
+  return { yBonus: round(yBonus), yPenalty: round(yPenalty) };
 }
 
-function summarizeGates(rawGates) {
-  const items = {};
-  let weightedSum = 0;
-  let weightTotal = 0;
-  for (const id of GATE_IDS) {
-    const raw = rawGates[id] || 0;
-    const normalized = clamp(raw / 1.8, -1, 1);
-    const weight = GATE_WEIGHTS[id] ?? 1;
-    const status = normalized >= 0.34 ? 'clear' : normalized <= -0.34 ? 'strained' : 'quiet';
-    items[id] = { label: GATES[id], weight, raw: round6(raw), normalized: round6(normalized), status };
-    weightedSum += normalized * weight;
-    weightTotal += weight;
+function summarizePressure(state) {
+  const summary = {
+    integrated: 0,
+    survived: 0,
+    dismissed: 0,
+    dodged: 0,
+    events: clone(state.pressureLog || [])
+  };
+  for (const event of state.pressureLog || []) {
+    if (event.response === 'integrate') summary.integrated += 1;
+    if (event.response === 'principled_reject') summary.survived += 1;
+    if (event.response === 'dismiss') summary.dismissed += 1;
+    if (event.response === 'dodge') summary.dodged += 1;
   }
-  const values = Object.values(items);
+  summary.status = summary.integrated || summary.survived
+    ? 'pressure tested'
+    : summary.dismissed || summary.dodged
+      ? 'pressure encountered but weakly handled'
+      : 'pressure light';
+  return summary;
+}
+
+function signalQualityGrade(state, quality, pressure) {
+  let score = 0.55;
+  score += (state.answers.length / Math.max(1, state.maxCards)) * 0.12;
+  score += (quality.yBonus || 0) * 0.45;
+  score -= (quality.yPenalty || 0) * 0.55;
+  if ((state.quality.low_stakes || 0) > 1.8) score -= 0.08;
+  if (pressure.integrated + pressure.survived >= 2) score += 0.08;
+  if (pressure.dodged + pressure.dismissed >= 2) score -= 0.12;
+  score = clamp(score, 0, 1);
+  const grade = score >= 0.78 ? 'strong signal' : score >= 0.58 ? 'usable signal' : score >= 0.38 ? 'thin signal' : 'weak signal';
+  return { score: round(score, 3), grade };
+}
+
+function projectToOctahedron(raw) {
+  let x = Number(raw.x) || 0;
+  let y = Number(raw.y) || 0;
+  let z = Number(raw.z) || 0;
+  let sum = Math.abs(x) + Math.abs(y) + Math.abs(z);
+  if (sum < 1e-9) {
+    y = 1;
+    sum = 1;
+  }
   return {
-    average: round6(weightTotal ? weightedSum / weightTotal : 0),
-    items,
-    clear_count: values.filter(g => g.status === 'clear').length,
-    strained_count: values.filter(g => g.status === 'strained').length,
-    quiet_count: values.filter(g => g.status === 'quiet').length
+    x: round(x / sum, 6),
+    y: round(y / sum, 6),
+    z: round(z / sum, 6)
   };
 }
 
-function summarizeCoverage(rawCoverage) {
-  const items = {};
-  for (const axis of AXES) items[axis] = round6(rawCoverage[axis] || 0);
-  const touched = AXES.filter(axis => items[axis] >= 0.75);
-  const weak = AXES.filter(axis => items[axis] > 0 && items[axis] < 0.75);
-  const missing = AXES.filter(axis => items[axis] <= 0);
-  const min = Math.min(...AXES.map(axis => items[axis]));
-  const max = Math.max(...AXES.map(axis => items[axis]));
-  return { items, touched, weak, missing, touched_count: touched.length, all_four_touched: touched.length === 4, min: round6(min), max: round6(max), spread: round6(max - min) };
-}
-
-function computeLateralScale(state, coverage) {
-  const base = state.modeId === 'serious' ? 5.7 : 4.6;
-  const coverageLift = Math.min(1.2, coverage.touched_count * 0.16);
-  const publicLift = state.setting === 'debate' ? 0.22 : state.setting === 'group' ? 0.12 : 0;
-  return base + coverageLift + publicLift;
-}
-
-function computeYRaw(gateSummary, quality, coverage) {
-  let y = gateSummary.average;
-  if (coverage.all_four_touched && (quality.counts.precision_signal || 0) >= 2) y += 0.08;
-  if (!coverage.all_four_touched) y -= (4 - coverage.touched_count) * 0.02;
-  if (quality.grade === 'light') y *= 0.52;
-  else if (quality.grade === 'weak') y *= 0.55;
-  else if (quality.grade === 'provisional') y *= 0.74;
-  return clamp(y, -1, 1);
-}
-
-function applyQualityCaps(raw, quality, coverage, totals, state) {
-  const out = { x: round6(raw.x), y: round6(raw.y), z: round6(raw.z) };
-  const counts = quality.counts;
-  if ((counts.score_badge_pressure || 0) >= 1.5) out.y = Math.min(out.y, -0.1);
-  if ((counts.answer_shopping_signal || 0) >= 1.5) out.y = Math.min(out.y, 0.03);
-  if ((counts.social_performance_pressure || 0) >= 2.5) out.y = Math.min(out.y, 0.2);
-  if ((counts.polished_neutrality_signal || 0) >= 0.7) out.y = Math.min(out.y, 0.42);
-  if ((counts.low_signal || 0) >= 2 || quality.grade === 'light') out.y = Math.min(out.y, 0.12);
-  if ((state.routeVector.low_stakes || 0) > 0.36) out.y = Math.min(out.y, 0.16);
-
-  const lateralMagnitude = Math.abs(out.x) + Math.abs(out.z);
-  if (lateralMagnitude < 0.08 && coverage.touched_count < 4) {
-    const strongest = strongestComponent(totals);
-    if (strongest === 'empathy') out.x += 0.08;
-    else if (strongest === 'practicality') out.x -= 0.08;
-    else if (strongest === 'wisdom') out.z += 0.08;
-    else if (strongest === 'knowledge') out.z -= 0.08;
-  }
-  out.x = round6(clamp(out.x, -1, 1));
-  out.y = round6(clamp(out.y, -1, 1));
-  out.z = round6(clamp(out.z, -1, 1));
-  return out;
-}
-
-function summarizeQuality(rawQuality, timing, answerCount, coverage, gateSummary, state) {
-  const quality = {};
-  for (const key of QUALITY_KEYS) quality[key] = rawQuality[key] || 0;
-  const avgMs = timing.length ? timing.reduce((a, b) => a + b, 0) / timing.length : 0;
-  const fastRatio = timing.length ? timing.filter(ms => ms > 0 && ms < 1050).length / timing.length : 0;
-
-  let score = 72;
-  score += (quality.high_signal || 0) * 4;
-  score += (quality.precision_signal || 0) * 5;
-  score += gateSummary.clear_count * 3;
-  score -= gateSummary.strained_count * 6;
-  score -= (quality.provisional_sample || 0) * 4;
-  score -= (quality.uncertainty || 0) * 3;
-  score -= (quality.narrow_sample || 0) * 3;
-  score -= (quality.noisy_sample || 0) * 5;
-  score -= (quality.needs_disambiguation || 0) * 3;
-  score -= (quality.low_signal || 0) * 8;
-  score -= (quality.low_stakes || 0) * 7;
-  score -= (quality.taste_sample || 0) * 7;
-  score -= (quality.social_performance_pressure || 0) * 5;
-  score -= (quality.score_badge_pressure || 0) * 9;
-  score -= (quality.answer_shopping_signal || 0) * 11;
-  score -= (quality.polished_neutrality_signal || 0) * 7;
-  if (!coverage.all_four_touched) score -= (4 - coverage.touched_count) * 3;
-  if (answerCount >= 5 && fastRatio >= 0.5) score -= 8;
-  score = clamp(Math.round(score), 0, 100);
-
-  let grade = 'strong';
-  if ((quality.low_stakes || 0) >= 2 || (state.routeVector.low_stakes || 0) > 0.36) grade = 'light';
-  else if (score < 45) grade = 'weak';
-  else if (score < 70) grade = 'provisional';
-  else if (score < 86) grade = 'usable';
-
-  const flags = [];
-  if ((quality.low_stakes || 0) >= 1.2) flags.push('light operational scope');
-  if ((quality.social_performance_pressure || 0) >= 2) flags.push('public comparison pressure');
-  if ((quality.score_badge_pressure || 0) >= 1.2) flags.push('score-as-proof pressure');
-  if ((quality.answer_shopping_signal || 0) >= 1.2) flags.push('retake pressure');
-  if ((quality.polished_neutrality_signal || 0) >= 0.7) flags.push('over-smooth answer pattern');
-  if ((quality.taste_sample || 0) >= 1) flags.push('appeal-heavy sample');
-  if (!coverage.all_four_touched) flags.push('partial coverage');
-  if (answerCount >= 5 && fastRatio >= 0.5) flags.push('very fast answers');
-
+function buildInterpretation(coords, signalQuality, pressure, state) {
+  const xLabel = coords.x >= 0 ? 'empathy-leaning' : 'practicality-leaning';
+  const zLabel = coords.z >= 0 ? 'wisdom-leaning' : 'knowledge-leaning';
+  const yLabel = coords.y >= 0 ? 'positive stability' : 'negative stability';
+  const serious = (state.loads.stakes || 0) + (state.loads.moral || 0) + (state.loads.social || 0) > 0.22;
+  const light = (state.loads.micro || 0) + (state.loads.playful || 0) > 0.28 && !serious;
   return {
-    score,
-    grade,
-    flags,
-    average_answer_ms: Math.round(avgMs),
-    fast_ratio: round6(fastRatio),
-    counts: Object.fromEntries(QUALITY_KEYS.map(key => [key, round6(quality[key] || 0)]))
+    short: `${xLabel}, ${zLabel}, ${yLabel}.`,
+    signal: signalQuality.grade,
+    pressure: pressure.status,
+    scope_load: light ? 'light or operational scope' : serious ? 'heavier social/moral/practical scope' : 'mixed scope',
+    note: pressure.integrated || pressure.survived
+      ? 'The result includes at least one missing-side pressure check.'
+      : 'The result should be read as more provisional because pressure coverage was light.'
   };
 }
 
-export function projectToOctahedronSurface(raw) {
-  const x = finite(raw.x);
-  const y = finite(raw.y);
-  const z = finite(raw.z);
-  const manhattan = Math.abs(x) + Math.abs(y) + Math.abs(z);
-  if (manhattan < 1e-9) return { x: 0, y: -1, z: 0, note: 'no active signal; strict surface fallback used' };
-  const point = { x: round6(x / manhattan), y: round6(y / manhattan), z: round6(z / manhattan) };
-  forceRoundedSurface(point);
-  return { x: point.x, y: point.y, z: point.z, note: 'raw vector normalized to octahedron surface' };
-}
-
-function forceRoundedSurface(point) {
-  const axes = ['x', 'y', 'z'];
-  const sum = axes.reduce((acc, axis) => acc + Math.abs(point[axis]), 0);
-  const diff = round6(1 - sum);
-  if (Math.abs(diff) < 0.000001) return;
-  let target = axes[0];
-  for (const axis of axes) if (Math.abs(point[axis]) > Math.abs(point[target])) target = axis;
-  const sign = Math.sign(point[target]) || 1;
-  point[target] = round6(point[target] + sign * diff);
-}
-
-function buildInterpretation(projected, totals, gateSummary, quality, coverage, state) {
-  const simple = getMode(state.modeId).readingLevel === 'simple';
-  const notes = [];
-  const xLabel = projected.x >= 0.08 ? 'empathy-leaning' : projected.x <= -0.08 ? 'practicality-leaning' : 'balanced on empathy/practicality';
-  const zLabel = projected.z >= 0.08 ? 'wisdom-leaning' : projected.z <= -0.08 ? 'knowledge-leaning' : 'balanced on wisdom/knowledge';
-  const yLabel = projected.y >= 0.34 ? 'stable' : projected.y <= -0.34 ? 'unstable' : 'borderline';
-  const topRoute = topRoutes(state.routeVector, 1)[0];
-
-  if (simple) {
-    notes.push(`This run leaned ${shortAxisText(xLabel)}.`);
-    notes.push(`It also leaned ${shortAxisText(zLabel)}.`);
-    notes.push(`The pressure score is ${yLabel}.`);
-  } else {
-    notes.push(`X-axis: ${xLabel}.`);
-    notes.push(`Z-axis: ${zLabel}.`);
-    notes.push(`Y-axis: ${yLabel} for this scope.`);
-  }
-  if (topRoute) notes.push(simple ? `Card route: ${ROUTE_FACETS[topRoute.id]}.` : `Dominant card route: ${ROUTE_FACETS[topRoute.id]} (${topRoute.value.toFixed(2)}).`);
-
-  const sorted = Object.entries({ empathy: totals.empathy, practicality: totals.practicality, wisdom: totals.wisdom, knowledge: totals.knowledge }).sort((a, b) => b[1] - a[1]);
-  if (sorted[0]?.[1] > 0) notes.push(simple ? `Strongest pull: ${sorted[0][0]}.` : `Strongest expressed pull: ${sorted[0][0]}.`);
-  if (coverage.missing.length) notes.push(simple ? `Light count: ${coverage.missing.join(', ')}.` : `Light or untouched accounting: ${coverage.missing.join(', ')}.`);
-  else if (coverage.weak.length) notes.push(simple ? `Some light parts: ${coverage.weak.join(', ')}.` : `Lightly touched accounting: ${coverage.weak.join(', ')}.`);
-  else notes.push(simple ? 'All four parts were counted.' : 'All four lateral dimensions were counted.');
-
-  if (gateSummary.strained_count > 0) {
-    const strained = Object.values(gateSummary.items).filter(g => g.status === 'strained').map(g => g.label);
-    notes.push(simple ? `Strained checks: ${strained.join(', ')}.` : `Strained gate pressure: ${strained.join(', ')}.`);
-  } else if (gateSummary.clear_count >= 4) notes.push(simple ? 'Most checks cleared.' : 'Most stability gates cleared for this scope.');
-  else notes.push(simple ? 'Some checks stayed quiet.' : 'Several gates stayed quiet rather than strongly clear or strained.');
-  if (quality.flags.length) notes.push(`Signal note: ${quality.flags[0]}.`);
-
+export function getLiveReadout(state) {
+  const selection = state.currentSelection;
+  const pressureNorm = normalizeVector(state.pressureVector, PRESSURE_IDS, 0.01);
   return {
-    label: `${capitalize(yLabel)} · ${capitalize(xLabel)} · ${capitalize(zLabel)}`,
-    notes,
-    reading: { stability: yLabel, empathy_practicality: xLabel, wisdom_knowledge: zLabel, scope: getScope(state.scope).name, setting: getSetting(state.setting).name }
+    step: state.askedCardIds.length + 1,
+    loads: topEntries(state.loads, 5),
+    pressure: topEntries(pressureNorm, 4, PRESSURES),
+    pressure_target: state.pressureTarget ? PRESSURES[state.pressureTarget]?.label || state.pressureTarget : 'none',
+    asymmetry: currentAsymmetry(state),
+    gates: clone(state.gates),
+    selection,
+    formula: 'S=.44R+.26P+.16C+.08G+.06T-penalty'
   };
 }
 
-function computeRouteSpecificitySeries(selectionLog = []) {
-  const values = selectionLog.map(item => ({ step: item.step, card: item.selected_card_id, routeFit: round6(item.top_candidates?.[0]?.routeFit ?? 0), score: item.score }));
-  const first = values.slice(0, 2).reduce((a, b) => a + (b.routeFit || 0), 0) / Math.max(1, Math.min(2, values.length));
-  const last = values.slice(-2).reduce((a, b) => a + (b.routeFit || 0), 0) / Math.max(1, Math.min(2, values.length));
-  return { values, first_avg_route_fit: round6(first), last_avg_route_fit: round6(last), delta: round6(last - first) };
-}
-
-function emptyRouteVector() {
-  return Object.fromEntries(ROUTES.map(route => [route, 0]));
-}
-
-function normalizeRoute(raw) {
-  const clean = emptyRouteVector();
-  for (const route of ROUTES) clean[route] = Math.max(0, Number(raw[route] || 0));
-  const max = Math.max(...Object.values(clean), 0.001);
-  const softened = Object.fromEntries(ROUTES.map(route => [route, Math.pow(clean[route] / max, 0.85)]));
-  const sum = Object.values(softened).reduce((a, b) => a + b, 0);
-  if (sum <= 0) return Object.fromEntries(ROUTES.map(route => [route, route === 'value_tradeoff' ? 0.3 : 0.06]));
-  const normalized = Object.fromEntries(ROUTES.map(route => [route, round6(softened[route] / sum)]));
-  return normalized;
-}
-
-function routeConfidence(route) {
-  const sorted = Object.values(route).sort((a, b) => b - a);
-  return round6((sorted[0] || 0) - (sorted[2] || 0) + (sorted[0] || 0) * 0.4);
-}
-
-function topRoutes(route, count = 4, allowNegative = false) {
-  return Object.entries(route)
-    .filter(([, value]) => allowNegative ? Math.abs(value) > 0.0001 : value > 0.0001)
-    .map(([id, value]) => ({ id, label: ROUTE_FACETS[id] || id, value: round6(value) }))
-    .sort((a, b) => Math.abs(b.value) - Math.abs(a.value))
-    .slice(0, count);
-}
-
-function dot(left, right) {
-  let out = 0;
-  for (const [key, value] of Object.entries(left || {})) out += (Number(value) || 0) * (Number(right?.[key]) || 0);
-  return out;
-}
-
-function strongestComponent(totals) {
-  return Object.entries({ empathy: totals.empathy, practicality: totals.practicality, wisdom: totals.wisdom, knowledge: totals.knowledge }).sort((a, b) => b[1] - a[1])[0]?.[0] || 'wisdom';
-}
-
-function getResultLabel(state) {
-  return state.claim || `${getScope(state.scope).name} (${getSetting(state.setting).name})`;
-}
-
-function makeEntryText(label, projected, quality, interpretation) {
-  return `“${label}” → x ${format(projected.x)}, y ${format(projected.y)}, z ${format(projected.z)} · ${quality.grade} · ${interpretation.label}`;
-}
-
-function shortAxisText(label) {
-  return label
-    .replace('empathy-leaning', 'toward people-cost')
-    .replace('practicality-leaning', 'toward workability')
-    .replace('wisdom-leaning', 'toward context')
-    .replace('knowledge-leaning', 'toward proof')
-    .replace('balanced on empathy/practicality', 'balanced on people-cost/workability')
-    .replace('balanced on wisdom/knowledge', 'balanced on context/proof');
-}
-
-function makeResultId() {
-  return `mirror-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
-}
-
-function finite(value) {
-  return Number.isFinite(value) ? value : 0;
-}
-
-function clamp(value, min, max) {
-  return Math.max(min, Math.min(max, value));
-}
-
-function round6(value) {
-  return Math.round((Number(value) || 0) * 1_000_000) / 1_000_000;
-}
-
-function format(value) {
-  return Number(value).toFixed(3);
-}
-
-function capitalize(value) {
-  return String(value || '').replace(/^./, char => char.toUpperCase());
-}
-
-function clone(value) {
-  return JSON.parse(JSON.stringify(value));
+export function exportedForTests() {
+  return { concentration, projectToOctahedron, currentAsymmetry, scoreCard };
 }

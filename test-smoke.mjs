@@ -1,108 +1,122 @@
-import { MODES, SCOPES, SETTINGS } from './data/cards.js';
+import assert from 'node:assert/strict';
+import { CARD_BANK } from './data/cards.js';
 import {
-  answerCard,
-  calculateResult,
+  finalizeProfile,
   getNextCard,
   makeInitialState,
-  projectToOctahedronSurface
+  recordAnswer
 } from './src/engine.js';
 
-function assert(condition, message) {
-  if (!condition) throw new Error(message);
+function choose(card, answerId) {
+  const answer = card.answers.find(item => item.id === answerId) || card.answers[0];
+  if (!answer) throw new Error(`No answer for card ${card.id}`);
+  return answer;
 }
 
-function checkSurface(point, label) {
-  const surface = Math.abs(point.x) + Math.abs(point.y) + Math.abs(point.z);
-  assert(Math.abs(surface - 1) < 1e-6, `${label}: expected surface equation, got ${surface}`);
-}
-
-function runScenario({ label, modeId = 'fast', scope = 'decision', setting = 'private', answerPicker = firstAnswer }) {
+function runScenario({ label, scope = 'claim', setting = 'private', modeId = 'fast', pick }) {
   const state = makeInitialState({ modeId, scope, setting, claim: label });
-  let guard = 0;
-  while (true) {
-    const card = getNextCard(state);
-    if (!card) break;
-    const answer = answerPicker(card, state);
-    answerCard(state, card, answer);
-    guard += 1;
-    assert(guard <= state.maxCards + 2, `too many cards for ${label}`);
+  const cards = [];
+  let card;
+  while ((card = getNextCard(state))) {
+    cards.push(card.id);
+    const answerId = pick?.(card, state, cards) || card.answers[0]?.id;
+    recordAnswer(state, card, choose(card, answerId));
   }
-  const result = calculateResult(state);
-  checkSurface(result.coordinates, label);
-  assert(result.coordinates.surface_check === 1, `${label}: rounded surface check failed`);
-  assert(result.visualizer_payload?.data?.data?.point, `${label}: missing visualizer payload`);
-  assert(result.quoted_label === label, `${label}: quoted label missing`);
-  return result;
+  return { state, cards, result: finalizeProfile(state) };
 }
 
-function firstAnswer(card) {
-  return card.answers[0];
+function surfaceOk(result) {
+  const p = result.coordinates;
+  return Math.abs(Math.abs(p.x) + Math.abs(p.y) + Math.abs(p.z) - 1) < 0.00001;
 }
 
-function pickById(ids) {
-  return card => card.answers.find(answer => ids.includes(answer.id)) || card.answers[0];
-}
-
-for (const modeId of Object.keys(MODES)) {
-  for (const scope of SCOPES.map(s => s.id)) {
-    for (const setting of SETTINGS.map(s => s.id)) {
-      runScenario({ label: 'smoke test', modeId, scope, setting });
-    }
+const chicken = runScenario({
+  label: 'the chicken probably came after the egg',
+  scope: 'argument',
+  setting: 'group',
+  modeId: 'adhd',
+  pick(card) {
+    const ids = {
+      opener_burden_01: 'words_do_work',
+      settle_best_01: 'cleaner_boundary',
+      definition_edge_01: 'origin_label',
+      context_pressure_01: 'context_seen_not_decisive',
+      proof_pressure_01: 'needs_counterexample_test',
+      score_pressure_01: 'compare_after_reasons',
+      final_commitment_01: 'weakened_claim'
+    };
+    return ids[card.id] || card.answers[0].id;
   }
-}
+});
+assert.equal(chicken.cards[0], 'opener_burden_01');
+assert.notEqual(chicken.cards[1], 'score_pressure_01');
+assert.ok(chicken.cards.includes('definition_edge_01') || chicken.cards.includes('causal_sequence_01') || chicken.cards.includes('settle_best_01'));
+assert.ok(surfaceOk(chicken.result));
 
-const micro = runScenario({
+const snack = runScenario({
   label: 'should i stop procrastinating and eat now',
   scope: 'decision',
   setting: 'private',
-  answerPicker: pickById(['body_budget', 'energy_drops', 'feed_then_return'])
+  modeId: 'adhd',
+  pick(card) {
+    const ids = {
+      opener_burden_01: 'not_that_deep',
+      micro_live_constraint_01: 'body_floor',
+      seriousness_load_01: 'light_probe',
+      constraint_pressure_01: 'considered_less_relevant_constraint',
+      final_commitment_01: 'retained_after_pressure'
+    };
+    return ids[card.id] || card.answers[0].id;
+  }
 });
-assert(micro.routing.selected_cards.includes('micro_body_state_01'), 'micro scenario did not route to body/state card');
-assert(micro.routing.selected_cards.includes('micro_delay_cost_01') || micro.routing.selected_cards.includes('micro_next_step_01'), 'micro scenario did not route to later micro cards');
-assert(!micro.routing.selected_cards.includes('opposition_best_01'), 'micro scenario routed to abstract opposition card');
+assert.equal(snack.cards[0], 'opener_burden_01');
+assert.ok(snack.cards.includes('micro_live_constraint_01'));
+assert.ok(snack.cards.length <= 7);
+assert.ok(surfaceOk(snack.result));
 
-const group = runScenario({
+const pressure = runScenario({
   label: 'my friends want to compare scores to prove who has the better take',
   scope: 'argument',
   setting: 'group',
-  answerPicker: pickById(['public_result_pressure', 'same_rules', 'after_reasons', 'exact_over_impressive'])
+  modeId: 'fast',
+  pick(card) {
+    const ids = {
+      opener_burden_01: 'real_world_cost',
+      seriousness_load_01: 'contest_load',
+      score_pressure_01: 'higher_number_wins',
+      polished_balance_01: 'looks_fair',
+      final_commitment_01: 'pressure_did_not_matter'
+    };
+    return ids[card.id] || card.answers.at(-1).id;
+  }
 });
-assert(group.routing.selected_cards.includes('public_score_use_01'), 'group scenario did not route to public score-use card');
+assert.equal(pressure.cards[0], 'opener_burden_01');
+assert.notEqual(pressure.cards[1], 'score_pressure_01');
+assert.ok(pressure.result.signal_quality.score < 0.75);
+assert.ok(surfaceOk(pressure.result));
 
-const policy = runScenario({
-  label: 'is this policy fair if it raises costs but improves enforcement',
-  scope: 'claim',
-  setting: 'debate',
-  answerPicker: pickById(['value_tradeoff_pressure', 'execution_cost', 'enforcement_load', 'terms_first'])
+const blunt = runScenario({
+  label: 'the cleanest rule is to punish repeated delays immediately',
+  scope: 'decision',
+  setting: 'private',
+  modeId: 'serious',
+  pick(card) {
+    const ids = {
+      opener_burden_01: 'real_world_cost',
+      seriousness_load_01: 'personal_action',
+      constraint_pressure_01: 'enforcement_limit',
+      person_pressure_01: 'considered_less_relevant_person',
+      opposite_model_01: 'other_right_wrong_weight',
+      final_commitment_01: 'retained_after_pressure'
+    };
+    return ids[card.id] || card.answers[0].id;
+  }
 });
-assert(policy.routing.selected_cards.includes('policy_load_01') || policy.routing.selected_cards.includes('value_tradeoff_01'), 'policy scenario did not route to system/tradeoff card');
+assert.ok(blunt.result.pressure.integrated + blunt.result.pressure.survived >= 1);
+assert.ok(surfaceOk(blunt.result));
 
-const comparison = runScenario({
-  label: 'which character has stronger reasoning under pressure',
-  scope: 'comparison',
-  setting: 'fiction',
-  answerPicker: pickById(['comparison_pressure', 'compare_method', 'strategic_clarity_under_power'])
-});
-assert(comparison.routing.selected_cards.includes('comparison_standard_01'), 'comparison scenario did not route to comparison standard card');
-assert(comparison.routing.selected_cards.includes('character_power_01'), 'comparison scenario did not route to character power card');
-
-for (const result of [micro, group, policy, comparison]) {
-  const specificity = result.routing.route_specificity;
-  assert(Number.isFinite(specificity.last_avg_route_fit), 'missing route specificity');
-  assert(specificity.last_avg_route_fit >= 0.12, 'late route fit too low');
+for (const card of CARD_BANK) {
+  assert.ok(card.answers?.length >= 4, `${card.id} should have at least four answers`);
 }
 
-for (const raw of [
-  { x: 0, y: 0, z: 0 },
-  { x: 2, y: 0, z: 0 },
-  { x: -0.2, y: 0.5, z: 0.3 },
-  { x: 0.123, y: -0.456, z: 0.789 }
-]) {
-  checkSurface(projectToOctahedronSurface(raw), `raw ${JSON.stringify(raw)}`);
-}
-
-console.log('42ndMirror v0.4 smoke and routing tests passed.');
-console.log('micro cards:', micro.routing.selected_cards.join(' -> '));
-console.log('group cards:', group.routing.selected_cards.join(' -> '));
-console.log('policy cards:', policy.routing.selected_cards.join(' -> '));
-console.log('comparison cards:', comparison.routing.selected_cards.join(' -> '));
+console.log('42ndMirror smoke and routing tests passed.');

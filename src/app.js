@@ -1,432 +1,436 @@
-import { MODES, SCOPES, SETTINGS, ROUTE_FACETS } from '../data/cards.js';
 import {
-  answerCard,
-  calculateResult,
+  CARD_BANK,
+  MODES,
+  SCOPES,
+  SETTINGS
+} from '../data/cards.js';
+import {
+  finalizeProfile,
   getAnswerText,
+  getLiveReadout,
   getMode,
   getNextCard,
   getReadableText,
-  getScope,
   getSetting,
+  getScope,
   getUICopy,
-  getRoutingSnapshot,
-  makeInitialState
+  makeInitialState,
+  quoteLabel,
+  recordAnswer
 } from './engine.js';
 
-const app = document.querySelector('#app');
+const STORAGE_HISTORY = '42ndMirror:history';
+const STORAGE_LAST = '42ndMirror:lastResult';
+const app = document.getElementById('app');
 
-let screen = 'start';
-let selectedMode = 'fast';
-let selectedScope = SCOPES[0].id;
-let selectedSetting = SETTINGS[0].id;
-let claim = '';
-let testState = null;
-let lastResult = null;
-let pendingRemovalId = null;
-let showRouter = true;
+const ui = {
+  modeId: 'fast',
+  scope: 'claim',
+  setting: 'private',
+  label: '',
+  state: null,
+  currentCard: null,
+  result: null,
+  history: loadHistory(),
+  pendingDeleteIndex: null
+};
 
-function render() {
-  document.body.dataset.mode = selectedMode;
-  if (screen === 'start') renderStart();
-  else if (screen === 'card') renderCard();
-  else if (screen === 'result') renderResult();
+renderStart();
+
+function copy() {
+  return getUICopy(ui.modeId);
+}
+
+function setMode(modeId) {
+  ui.modeId = modeId;
+  document.body.dataset.mode = modeId;
 }
 
 function renderStart() {
-  const mode = getMode(selectedMode);
-  const copy = getUICopy(selectedMode);
-  const simple = mode.readingLevel === 'simple';
-  const entries = loadEntries();
-
+  setMode(ui.modeId);
+  const c = copy();
   app.innerHTML = `
     <section class="card start-card">
       <div class="header">
-        <div class="brand">
-          <div class="brand-title">${escapeHtml(copy.title)}</div>
-          <div class="brand-subtitle">${escapeHtml(copy.subtitle)}</div>
-          <div class="mini-rule">${escapeHtml(copy.howItWorks)}</div>
+        <div>
+          <div class="brand-title">${escapeHTML(c.title)}</div>
+          <div class="brand-subtitle">${escapeHTML(c.subtitle)}</div>
+          <div class="mini-rule">${escapeHTML(c.howItWorks)}</div>
         </div>
-        <div class="badge">${escapeHtml(mode.shortName)}</div>
+        <div class="badge">|x| + |y| + |z| = 1</div>
       </div>
 
-      <p class="section-title">${escapeHtml(copy.modeTitle)}</p>
+      <hr>
+      <h2 class="section-title">${escapeHTML(c.modeTitle)}</h2>
       <div class="grid" id="modeGrid">
-        ${Object.values(MODES).map(item => `
-          <button class="mode-tile ${item.id === selectedMode ? 'selected' : ''}" data-mode="${item.id}" type="button">
-            <div class="mode-name">${escapeHtml(simple ? item.shortName : item.name)}</div>
-            <div class="mode-desc">${escapeHtml(simple ? simplifyModeDesc(item) : item.description)}</div>
-          </button>
-        `).join('')}
+        ${Object.values(MODES).map(mode => tile('mode-tile', mode.id, ui.modeId === mode.id, mode.name, mode.simpleName, '')).join('')}
       </div>
 
-      <hr />
-
-      <p class="section-title">${escapeHtml(copy.scopeTitle)}</p>
+      <hr>
+      <h2 class="section-title">${escapeHTML(c.scopeTitle)}</h2>
       <div class="grid" id="scopeGrid">
-        ${SCOPES.map(item => `
-          <button class="scope-tile ${item.id === selectedScope ? 'selected' : ''}" data-scope="${item.id}" type="button">
-            <div class="scope-name">${escapeHtml(simple ? item.simpleName : item.name)}</div>
-            <div class="scope-desc">${escapeHtml(simple ? item.simpleDescription : item.description)}</div>
-          </button>
-        `).join('')}
+        ${SCOPES.map(scope => tile('scope-tile', scope.id, ui.scope === scope.id, scope.name, scope.simpleName, '')).join('')}
       </div>
 
-      <hr />
-
-      <p class="section-title">${escapeHtml(copy.settingTitle)}</p>
+      <hr>
+      <h2 class="section-title">${escapeHTML(c.settingTitle)}</h2>
       <div class="grid" id="settingGrid">
-        ${SETTINGS.map(item => `
-          <button class="scope-tile ${item.id === selectedSetting ? 'selected' : ''}" data-setting="${item.id}" type="button">
-            <div class="scope-name">${escapeHtml(simple ? item.simpleName : item.name)}</div>
-            <div class="scope-desc">${escapeHtml(simple ? item.simpleDescription : item.description)}</div>
-          </button>
-        `).join('')}
+        ${SETTINGS.map(setting => tile('scope-tile', setting.id, ui.setting === setting.id, setting.name, setting.simpleName, '')).join('')}
       </div>
 
       <div class="field-group">
-        <label for="claimInput"><strong>${escapeHtml(copy.labelTitle)}</strong><br>${escapeHtml(copy.labelHelp)}</label>
-        <textarea id="claimInput" maxlength="500" placeholder="${escapeHtml(copy.labelPlaceholder)}">${escapeHtml(claim)}</textarea>
+        <label for="labelInput"><strong>${escapeHTML(c.labelTitle)}</strong><br>${escapeHTML(c.labelHelp)}</label>
+        <textarea id="labelInput" placeholder="${escapeAttr(c.labelPlaceholder)}">${escapeHTML(ui.label)}</textarea>
       </div>
 
       <div class="actions">
-        <button id="clearButton" class="ghost-button" type="button">${escapeHtml(copy.reset)}</button>
-        <button id="startButton" class="primary-button" type="button">${escapeHtml(copy.start)}</button>
+        <button class="ghost-button" id="clearBtn">${escapeHTML(c.reset)}</button>
+        <button class="primary-button" id="startBtn">${escapeHTML(c.start)}</button>
       </div>
     </section>
 
-    <section class="card start-card history-card">
+    <section class="card history-card">
       <div class="history-head">
-        <p class="section-title">${escapeHtml(copy.history)}</p>
-        <span class="small">${entries.length} saved</span>
+        <h2 class="section-title">${escapeHTML(c.saved)}</h2>
       </div>
-      ${entries.length ? `<div class="entry-list">${entries.map(entry => renderEntry(entry, copy)).join('')}</div>` : `<div class="empty-history">${escapeHtml(copy.historyEmpty)}</div>`}
+      <div class="entry-list" id="historyList">${renderHistoryHTML()}</div>
     </section>
-
-    ${pendingRemovalId ? renderConfirmModal(copy) : ''}
   `;
 
-  app.querySelectorAll('[data-mode]').forEach(button => button.addEventListener('click', () => { selectedMode = button.dataset.mode; render(); }));
-  app.querySelectorAll('[data-scope]').forEach(button => button.addEventListener('click', () => { selectedScope = button.dataset.scope; render(); }));
-  app.querySelectorAll('[data-setting]').forEach(button => button.addEventListener('click', () => { selectedSetting = button.dataset.setting; render(); }));
-  app.querySelectorAll('[data-remove-entry]').forEach(button => button.addEventListener('click', () => { pendingRemovalId = button.dataset.removeEntry; render(); }));
-
-  const claimInput = app.querySelector('#claimInput');
-  claimInput.addEventListener('input', () => { claim = claimInput.value; });
-
-  app.querySelector('#clearButton').addEventListener('click', () => {
-    selectedMode = 'fast';
-    selectedScope = SCOPES[0].id;
-    selectedSetting = SETTINGS[0].id;
-    claim = '';
-    testState = null;
-    lastResult = null;
-    render();
-  });
-
-  app.querySelector('#startButton').addEventListener('click', () => {
-    testState = makeInitialState({ modeId: selectedMode, scope: selectedScope, setting: selectedSetting, claim });
-    screen = 'card';
-    render();
-  });
-
-  const cancel = app.querySelector('#cancelRemoveButton');
-  if (cancel) cancel.addEventListener('click', () => { pendingRemovalId = null; render(); });
-  const confirm = app.querySelector('#confirmRemoveButton');
-  if (confirm) confirm.addEventListener('click', () => { removeEntry(pendingRemovalId); pendingRemovalId = null; render(); });
+  bindStartEvents();
 }
 
-function simplifyModeDesc(item) {
-  if (item.id === 'adhd') return 'Simple words.';
-  if (item.id === 'serious') return 'More cards.';
-  return 'Short run.';
-}
-
-function renderEntry(entry, copy) {
-  const coords = entry.coordinates || {};
-  const label = entry.quoted_label || entry.claim || copy.noLabel;
+function tile(className, id, selected, normal, simple, desc) {
+  const simpleMode = getMode(ui.modeId).readingLevel === 'simple';
+  const label = simpleMode ? simple : normal;
   return `
-    <article class="entry-item">
-      <div class="entry-main">
-        <div class="entry-label">“${escapeHtml(label)}”</div>
-        <div class="entry-meta">${escapeHtml(entry.scope_label || 'Scope')} · ${escapeHtml(entry.setting_label || 'Setting')} · ${escapeHtml(entry.signal_grade || '')}</div>
-        <div class="entry-score">x ${formatCoord(coords.x)} · y ${formatCoord(coords.y)} · z ${formatCoord(coords.z)}</div>
-      </div>
-      <button class="ghost-button small-button" data-remove-entry="${escapeHtml(entry.id)}" type="button">${escapeHtml(copy.remove)}</button>
-    </article>
+    <button class="${className} ${selected ? 'selected' : ''}" data-id="${escapeAttr(id)}">
+      <span class="scope-name">${escapeHTML(label)}</span>
+      ${desc ? `<span class="scope-desc">${escapeHTML(desc)}</span>` : ''}
+    </button>
   `;
 }
 
-function renderConfirmModal(copy) {
-  return `
-    <div class="modal-backdrop" role="presentation">
-      <section class="modal-card" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
-        <h2 id="confirmTitle">${escapeHtml(copy.confirmTitle)}</h2>
-        <p>${escapeHtml(copy.confirmText)}</p>
-        <div class="actions modal-actions">
-          <button id="cancelRemoveButton" class="ghost-button" type="button">${escapeHtml(copy.cancel)}</button>
-          <button id="confirmRemoveButton" class="primary-button danger" type="button">${escapeHtml(copy.confirmRemove)}</button>
-        </div>
-      </section>
-    </div>
-  `;
+function bindStartEvents() {
+  const labelInput = document.getElementById('labelInput');
+  labelInput?.addEventListener('input', () => { ui.label = labelInput.value; });
+
+  document.querySelectorAll('#modeGrid .mode-tile').forEach(btn => {
+    btn.addEventListener('click', () => {
+      ui.label = labelInput?.value || ui.label;
+      ui.modeId = btn.dataset.id;
+      renderStart();
+    });
+  });
+  document.querySelectorAll('#scopeGrid .scope-tile').forEach(btn => {
+    btn.addEventListener('click', () => {
+      ui.scope = btn.dataset.id;
+      renderStart();
+    });
+  });
+  document.querySelectorAll('#settingGrid .scope-tile').forEach(btn => {
+    btn.addEventListener('click', () => {
+      ui.setting = btn.dataset.id;
+      renderStart();
+    });
+  });
+  document.getElementById('clearBtn')?.addEventListener('click', () => {
+    ui.label = '';
+    renderStart();
+  });
+  document.getElementById('startBtn')?.addEventListener('click', startRun);
+
+  document.querySelectorAll('[data-remove-entry]').forEach(btn => {
+    btn.addEventListener('click', () => showDeleteModal(Number(btn.dataset.removeEntry)));
+  });
+}
+
+function startRun() {
+  const labelInput = document.getElementById('labelInput');
+  ui.label = (labelInput?.value || '').trim();
+  ui.state = makeInitialState({ modeId: ui.modeId, scope: ui.scope, setting: ui.setting, claim: ui.label });
+  ui.currentCard = getNextCard(ui.state);
+  if (!ui.currentCard) {
+    ui.result = finalizeProfile(ui.state);
+    saveResult(ui.result);
+    renderResult();
+    return;
+  }
+  renderCard();
 }
 
 function renderCard() {
-  const card = getNextCard(testState);
-  if (!card) {
-    lastResult = calculateResult(testState);
-    saveEntry(lastResult);
-    screen = 'result';
-    render();
-    return;
-  }
-
-  const copy = getUICopy(testState.modeId);
-  const text = getReadableText(card, testState.modeId);
-  const label = testState.claim || copy.noLabel;
-  const progressPercent = Math.max(6, Math.min(98, (testState.askedCardIds.length / Math.max(1, testState.maxCards)) * 100));
-  const routing = getRoutingSnapshot(testState);
+  setMode(ui.modeId);
+  const c = copy();
+  const card = ui.currentCard;
+  const text = getReadableText(card, ui.modeId);
+  const step = ui.state.askedCardIds.length + 1;
+  const progress = Math.min(100, (ui.state.askedCardIds.length / ui.state.maxCards) * 100);
+  const live = getLiveReadout(ui.state);
 
   app.innerHTML = `
     <section class="card question-card">
       <div class="progress-wrap">
-        <div class="run-label">${escapeHtml(copy.quotedScope)}: “${escapeHtml(label)}”</div>
-        <div class="small">${escapeHtml(getMode(testState.modeId).name)} · ${escapeHtml(getScope(testState.scope).name)} · ${escapeHtml(getSetting(testState.setting).name)} · ${escapeHtml(copy.card)} ${testState.askedCardIds.length + 1}/${testState.maxCards}</div>
-        <div class="progress-line"><div class="progress-bar" style="width:${progressPercent}%"></div></div>
+        <span class="run-label">${escapeHTML(quoteLabel(ui.state.claim, c))}</span>
+        <div class="small">${escapeHTML(getMode(ui.modeId).name)} · ${escapeHTML(getScope(ui.scope).name)} · ${escapeHTML(getSetting(ui.setting).name)} · ${escapeHTML(c.card)} ${step}/${ui.state.maxCards}</div>
+        <div class="progress-line"><div class="progress-bar" style="width:${progress}%"></div></div>
       </div>
 
       <div class="card-layout">
         <div class="question-main">
-          <div class="kicker">${escapeHtml(text.kicker)}</div>
-          <h1 class="question-title">${escapeHtml(text.title)}</h1>
-          <p class="question-help">${escapeHtml(text.help)}</p>
-
+          <div class="kicker">${escapeHTML(text.kicker || '')}</div>
+          <h1 class="question-title">${escapeHTML(text.title || '')}</h1>
+          <p class="question-help">${escapeHTML(text.help || c.chooseOne)}</p>
           <div class="answers">
-            ${card.answers.map(answer => {
-              const answerText = getAnswerText(answer, testState.modeId);
-              return `
-                <button class="answer-button" type="button" data-answer="${escapeHtml(answer.id)}">
-                  <span class="answer-main">${escapeHtml(answerText.main)}</span>
-                  ${answerText.sub ? `<span class="answer-sub">${escapeHtml(answerText.sub)}</span>` : ''}
-                </button>
-              `;
+            ${(card.answers || []).map(answer => {
+              const a = getAnswerText(answer, ui.modeId);
+              return `<button class="answer-button" data-answer="${escapeAttr(answer.id)}">
+                <span class="answer-main">${escapeHTML(a.main || '')}</span>
+                <span class="answer-sub">${escapeHTML(a.sub || '')}</span>
+              </button>`;
             }).join('')}
           </div>
         </div>
-
-        ${showRouter ? renderRoutingPanel(routing, copy) : ''}
+        ${renderLogicPanel(live)}
       </div>
 
       <div class="actions">
-        <button id="backStartButton" class="ghost-button" type="button">${escapeHtml(copy.restart)}</button>
-        <button id="toggleRouterButton" class="ghost-button" type="button">${showRouter ? 'Hide math' : 'Show math'}</button>
+        <button class="ghost-button" id="backBtn">${escapeHTML(c.restart)}</button>
       </div>
     </section>
   `;
 
-  app.querySelectorAll('[data-answer]').forEach(button => {
-    button.addEventListener('click', () => {
-      const answer = card.answers.find(item => item.id === button.dataset.answer);
-      if (!answer) return;
-      answerCard(testState, card, answer);
-      render();
+  document.querySelectorAll('.answer-button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const answer = card.answers.find(a => a.id === btn.dataset.answer);
+      recordAnswer(ui.state, card, answer);
+      ui.currentCard = getNextCard(ui.state);
+      if (!ui.currentCard) {
+        ui.result = finalizeProfile(ui.state);
+        saveResult(ui.result);
+        renderResult();
+      } else {
+        renderCard();
+      }
     });
   });
-  app.querySelector('#backStartButton').addEventListener('click', () => { screen = 'start'; testState = null; lastResult = null; render(); });
-  app.querySelector('#toggleRouterButton').addEventListener('click', () => { showRouter = !showRouter; render(); });
+  document.getElementById('backBtn')?.addEventListener('click', () => {
+    ui.state = null;
+    ui.currentCard = null;
+    renderStart();
+  });
 }
 
-function renderRoutingPanel(routing, copy) {
-  const selection = routing.selection || {};
-  const parts = selection.parts || {};
+function renderLogicPanel(live) {
+  const selected = live.selection;
+  const parts = selected?.parts || {};
   return `
-    <aside class="logic-panel" aria-label="${escapeHtml(copy.routing)}">
-      <div class="logic-head">
-        <span>${escapeHtml(copy.routing)}</span>
-        <span class="logic-score">S=${formatCoord(selection.score)}</span>
-      </div>
-      <div class="formula">${escapeHtml(selection.formula || 'S = .54R + .22D + .12G + .08T')}</div>
-      <div class="logic-card-id">next: ${escapeHtml(selection.selected_card_id || '')}</div>
-      <div class="score-grid">
+    <aside class="logic-panel">
+      <div class="logic-head"><span>${escapeHTML(copy().routing)}</span><span class="logic-score">${selected ? selected.score.toFixed(3) : 'seed'}</span></div>
+      <div class="formula">${escapeHTML(live.formula)}</div>
+      ${selected ? `<div class="logic-card-id">next: ${escapeHTML(selected.selected)}</div>` : ''}
+      ${selected ? `<div class="score-grid">
         ${miniScore('R', parts.route)}
-        ${miniScore('D', parts.deficit)}
+        ${miniScore('P', parts.pressure)}
+        ${miniScore('C', parts.gap)}
         ${miniScore('G', parts.gate)}
-        ${miniScore('T', parts.stage)}
-      </div>
+      </div>` : ''}
       <div class="route-bars">
-        ${routing.top_routes.map(route => routeBar(route.label, route.value)).join('')}
+        ${bars('load', live.loads)}
+        ${bars('pressure', live.pressure)}
       </div>
       <div class="logic-log">
-        ${routing.recent_route_log.map(item => renderRouteLog(item)).join('')}
+        <div class="logic-line">target: ${escapeHTML(live.pressure_target)}</div>
+        <div class="logic-line">asym: ${escapeHTML(live.asymmetry ? `${live.asymmetry.axis} → test ${live.asymmetry.oppositeAxis}` : 'none yet')}</div>
       </div>
     </aside>
   `;
 }
 
 function miniScore(label, value) {
-  return `<div class="mini-score"><span>${escapeHtml(label)}</span><strong>${formatCoord(value)}</strong></div>`;
+  return `<div class="mini-score"><span>${escapeHTML(label)}</span><strong>${Number(value || 0).toFixed(2)}</strong></div>`;
 }
 
-function routeBar(label, value) {
-  const pct = Math.max(2, Math.min(100, Number(value || 0) * 100));
-  return `
-    <div class="route-row">
-      <div class="route-label"><span>${escapeHtml(label)}</span><span>${Number(value || 0).toFixed(2)}</span></div>
-      <div class="route-track"><div class="route-fill" style="width:${pct}%"></div></div>
-    </div>
-  `;
-}
-
-function renderRouteLog(item) {
-  if (item.type === 'seed') {
-    return `<div class="logic-line">t0 seed · ${escapeHtml((item.top || []).map(r => `${ROUTE_FACETS[r.id] || r.id} ${Number(r.value).toFixed(2)}`).join(' / '))}</div>`;
-  }
-  return `<div class="logic-line">t${item.step} Δ · ${escapeHtml((item.delta || []).map(r => `${ROUTE_FACETS[r.id] || r.id} ${r.value >= 0 ? '+' : ''}${Number(r.value).toFixed(2)}`).join(' / '))}</div>`;
+function bars(label, items) {
+  return `<div>
+    <div class="logic-line">${escapeHTML(label)}</div>
+    ${(items || []).map(item => `
+      <div>
+        <div class="route-label"><span>${escapeHTML(item.label || item.key)}</span><span>${Number(item.value || 0).toFixed(2)}</span></div>
+        <div class="route-track"><div class="route-fill" style="width:${Math.max(2, Math.min(100, (Number(item.value || 0) * 100)))}%"></div></div>
+      </div>
+    `).join('')}
+  </div>`;
 }
 
 function renderResult() {
-  const result = lastResult;
-  const copy = getUICopy(result.mode);
-  const coords = result.coordinates;
-  const json = JSON.stringify(result, null, 2);
-  const gatePills = Object.entries(result.gates.items).map(([id, gate]) => `<span class="pill ${gate.status}" title="${escapeHtml(id)}">${escapeHtml(gate.label)}: ${escapeHtml(gate.status)}</span>`).join('');
-  const coveragePills = Object.entries(result.coverage.items).map(([axis, value]) => `<span class="pill neutral">${escapeHtml(axis)}: ${escapeHtml(Number(value).toFixed(2))}</span>`).join('');
-
+  setMode(ui.modeId);
+  const c = copy();
+  const r = ui.result;
+  localStorage.setItem(STORAGE_LAST, JSON.stringify(r));
+  const p = r.coordinates;
   app.innerHTML = `
     <section class="card result-card">
-      <div class="header">
-        <div class="brand">
-          <div class="kicker">${escapeHtml(copy.result)}</div>
-          <div class="run-label result-label">${escapeHtml(copy.quotedScope)}: “${escapeHtml(result.quoted_label || copy.noLabel)}”</div>
-          <div class="brand-title result-title">${escapeHtml(result.interpretation.label)}</div>
-          <div class="brand-subtitle">${escapeHtml(result.entry_text)}</div>
-        </div>
-        <div class="badge">signal: ${escapeHtml(result.signal_quality.grade)} · ${result.signal_quality.score}/100</div>
+      <div>
+        <span class="run-label result-label">${escapeHTML(r.quoted_scope)}</span>
+        <h1 class="result-title">${escapeHTML(c.result)}</h1>
       </div>
-
-      ${result.signal_quality.flags.length ? `<div class="warning">${escapeHtml(result.signal_quality.flags.join(' · '))}</div>` : ''}
 
       <div class="visualizer-shell">
         <div class="visualizer-head">
-          <div><p class="section-title">${escapeHtml(copy.projectedOutput)}</p><div class="small">${escapeHtml(copy.projectedHelp)}</div></div>
-          <button id="openVisualizerButton" class="ghost-button" type="button">${escapeHtml(copy.openVisualizer)}</button>
+          <strong>${escapeHTML(c.graphPoint)}</strong>
+          <span class="small">x ${fmt(p.x)} · y ${fmt(p.y)} · z ${fmt(p.z)}</span>
         </div>
-        <iframe id="visualizerFrame" class="visualizer-frame" src="./visualizer.html?embed=1" title="Epistemic Octahedron visualizer"></iframe>
+        <iframe id="visualizerFrame" class="visualizer-frame" src="./visualizer.html?x=${encodeURIComponent(p.x)}&y=${encodeURIComponent(p.y)}&z=${encodeURIComponent(p.z)}" title="Epistemic Octahedron visualizer"></iframe>
       </div>
 
       <div class="result-grid">
-        <div>
-          <p class="section-title">${escapeHtml(copy.coordinate)}</p>
-          <div class="coord-box">${coordLine('x', coords.x)}${coordLine('y', coords.y)}${coordLine('z', coords.z)}</div>
-          <div class="small" style="margin-top:10px;">${escapeHtml(copy.check)}: |x| + |y| + |z| = ${coords.surface_check}</div>
-          <div class="small">+x empathy, -x practicality, +z wisdom, -z knowledge.</div>
-
-          <hr />
-          <p class="section-title">${escapeHtml(copy.gates)}</p>
-          <div class="pill-row">${gatePills}</div>
-
-          <hr />
-          <p class="section-title">${escapeHtml(copy.coverage)}</p>
-          <div class="pill-row">${coveragePills}</div>
+        <div class="coord-box">
+          <h2 class="section-title">${escapeHTML(c.graphPoint)}</h2>
+          ${coordLine('x', p.x)}
+          ${coordLine('y', p.y)}
+          ${coordLine('z', p.z)}
+          <div class="coord-line"><span>${escapeHTML(c.mathCheck)}</span><strong>${fmt(r.surface_check)}</strong></div>
         </div>
-
         <div>
-          <p class="section-title">${escapeHtml(copy.readout)}</p>
-          <div class="explain-list">${result.interpretation.notes.map(note => `<div>${escapeHtml(note)}</div>`).join('')}</div>
-          <hr />
-          <p class="section-title">${escapeHtml(copy.routing)}</p>
-          ${renderResultRouting(result.routing)}
+          <h2 class="section-title">${escapeHTML(c.resultText)}</h2>
+          <div class="explain-list compact">
+            <div>${escapeHTML(r.interpretation.short)}</div>
+            <div>Signal: ${escapeHTML(r.signal_quality.grade)} (${escapeHTML(String(r.signal_quality.score))}).</div>
+            <div>Pressure: ${escapeHTML(r.pressure.status)}.</div>
+            <div>Scope load: ${escapeHTML(r.interpretation.scope_load)}.</div>
+            <div>${escapeHTML(r.interpretation.note)}</div>
+          </div>
         </div>
       </div>
 
-      <hr />
+      <div>
+        <h2 class="section-title">${escapeHTML(c.routing)}</h2>
+        <div class="pill-row">
+          ${(r.loads_top || []).map(item => `<span class="pill neutral">${escapeHTML(item.label)} ${Number(item.value).toFixed(2)}</span>`).join('')}
+        </div>
+      </div>
+
       <details>
-        <summary class="section-title" style="cursor:pointer;">${escapeHtml(copy.json)}</summary>
-        <pre class="codeblock" id="jsonBlock">${escapeHtml(json)}</pre>
+        <summary class="section-title">JSON output</summary>
+        <pre class="codeblock">${escapeHTML(JSON.stringify(r, null, 2))}</pre>
       </details>
 
       <div class="actions">
-        <button id="copyButton" class="ghost-button" type="button">${escapeHtml(copy.copy)}</button>
-        <button id="retakeButton" class="primary-button" type="button">${escapeHtml(copy.retake)}</button>
+        <button class="ghost-button" id="homeBtn">${escapeHTML(c.retake)}</button>
+        <button class="primary-button" id="copyBtn">${escapeHTML(c.copy)}</button>
       </div>
     </section>
   `;
 
-  app.querySelector('#copyButton').addEventListener('click', async () => {
-    try { await navigator.clipboard.writeText(json); app.querySelector('#copyButton').textContent = copy.copied; }
-    catch { app.querySelector('#copyButton').textContent = copy.copyFailed; }
+  document.getElementById('homeBtn')?.addEventListener('click', () => {
+    ui.state = null;
+    ui.currentCard = null;
+    ui.result = null;
+    renderStart();
   });
-  app.querySelector('#retakeButton').addEventListener('click', () => { screen = 'start'; testState = null; lastResult = null; render(); });
-  app.querySelector('#openVisualizerButton').addEventListener('click', () => {
-    const url = `./visualizer.html?x=${encodeURIComponent(coords.x)}&y=${encodeURIComponent(coords.y)}&z=${encodeURIComponent(coords.z)}`;
-    window.open(url, '_blank', 'noopener,noreferrer');
+  document.getElementById('copyBtn')?.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(r, null, 2));
+      document.getElementById('copyBtn').textContent = c.copied;
+    } catch {
+      document.getElementById('copyBtn').textContent = c.copyFailed;
+    }
   });
 
-  const frame = app.querySelector('#visualizerFrame');
-  const post = () => postResultToVisualizer(frame, result);
-  frame.addEventListener('load', post);
-  setTimeout(post, 300);
-  setTimeout(post, 1000);
+  const frame = document.getElementById('visualizerFrame');
+  frame?.addEventListener('load', () => {
+    frame.contentWindow?.postMessage(r.visualizer_payload, '*');
+  });
 }
 
-function renderResultRouting(routing) {
-  const series = routing.route_specificity || {};
-  return `
-    <div class="explain-list compact">
-      <div>route fit: ${formatCoord(series.first_avg_route_fit)} → ${formatCoord(series.last_avg_route_fit)} (${Number(series.delta || 0) >= 0 ? '+' : ''}${formatCoord(series.delta)})</div>
-      <div>top route: ${escapeHtml((routing.top_routes || []).slice(0, 3).map(r => `${r.label} ${Number(r.value).toFixed(2)}`).join(' / '))}</div>
-      <div>cards: ${escapeHtml((routing.selected_cards || []).join(' → '))}</div>
+function coordLine(k, v) {
+  return `<div class="coord-line"><span>${escapeHTML(k)}</span><strong>${fmt(v)}</strong></div>`;
+}
+
+function fmt(v) {
+  return Number(v || 0).toFixed(6);
+}
+
+function saveResult(result) {
+  ui.history = loadHistory();
+  ui.history.unshift({
+    claim: result.claim,
+    quoted_scope: result.quoted_scope,
+    mode: result.mode,
+    scope: result.scope,
+    setting: result.setting,
+    coordinates: result.coordinates,
+    surface_check: result.surface_check,
+    signal_quality: result.signal_quality,
+    created_at: result.created_at
+  });
+  ui.history = ui.history.slice(0, 12);
+  localStorage.setItem(STORAGE_HISTORY, JSON.stringify(ui.history));
+  localStorage.setItem(STORAGE_LAST, JSON.stringify(result));
+}
+
+function loadHistory() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(STORAGE_HISTORY) || '[]');
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function renderHistoryHTML() {
+  const c = copy();
+  if (!ui.history.length) return `<div class="empty-history">${escapeHTML(c.savedEmpty)}</div>`;
+  return ui.history.map((entry, index) => {
+    const p = entry.coordinates || { x: 0, y: 0, z: 0 };
+    return `<div class="entry-item">
+      <div>
+        <div class="entry-label">${escapeHTML(entry.quoted_scope || quoteLabel(entry.claim, c))}</div>
+        <div class="entry-meta">${escapeHTML(entry.mode || '')} · ${escapeHTML(entry.scope || '')} · ${escapeHTML(entry.setting || '')} · ${escapeHTML(entry.signal_quality?.grade || '')}</div>
+        <div class="entry-score">x ${fmt(p.x)} · y ${fmt(p.y)} · z ${fmt(p.z)}</div>
+      </div>
+      <button class="ghost-button small-button" data-remove-entry="${index}">${escapeHTML(c.remove)}</button>
+    </div>`;
+  }).join('');
+}
+
+function showDeleteModal(index) {
+  ui.pendingDeleteIndex = index;
+  const c = copy();
+  const modal = document.createElement('div');
+  modal.className = 'modal-backdrop';
+  modal.innerHTML = `
+    <div class="modal-card">
+      <h2>${escapeHTML(c.confirmTitle)}</h2>
+      <p>${escapeHTML(c.confirmText)}</p>
+      <div class="actions modal-actions">
+        <button class="ghost-button" id="cancelDelete">${escapeHTML(c.cancel)}</button>
+        <button class="primary-button danger" id="confirmDelete">${escapeHTML(c.confirmRemove)}</button>
+      </div>
     </div>
   `;
+  document.body.appendChild(modal);
+  document.getElementById('cancelDelete')?.addEventListener('click', () => modal.remove());
+  document.getElementById('confirmDelete')?.addEventListener('click', () => {
+    ui.history.splice(ui.pendingDeleteIndex, 1);
+    localStorage.setItem(STORAGE_HISTORY, JSON.stringify(ui.history));
+    modal.remove();
+    renderStart();
+  });
 }
 
-function saveEntry(result) {
-  try { localStorage.setItem('42ndMirror:lastResult', JSON.stringify(result)); } catch {}
-  const entries = loadEntries();
-  if (entries.some(entry => entry.id === result.id)) return;
-  const entry = {
-    id: result.id,
-    created_at: result.created_at,
-    quoted_label: result.quoted_label,
-    claim: result.claim,
-    mode_label: result.mode_label,
-    scope_label: result.scope_label,
-    setting_label: result.setting_label,
-    coordinates: result.coordinates,
-    signal_grade: result.signal_quality.grade,
-    signal_score: result.signal_quality.score,
-    interpretation_label: result.interpretation.label,
-    entry_text: result.entry_text
-  };
-  const next = [entry, ...entries].slice(0, 50);
-  try { localStorage.setItem('42ndMirror:entries', JSON.stringify(next)); } catch {}
+function escapeHTML(value) {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
 }
 
-function loadEntries() {
-  try { const parsed = JSON.parse(localStorage.getItem('42ndMirror:entries') || '[]'); return Array.isArray(parsed) ? parsed : []; }
-  catch { return []; }
+function escapeAttr(value) {
+  return escapeHTML(value).replaceAll('`', '&#096;');
 }
 
-function removeEntry(id) {
-  const entries = loadEntries().filter(entry => entry.id !== id);
-  try { localStorage.setItem('42ndMirror:entries', JSON.stringify(entries)); } catch {}
-}
-
-function postResultToVisualizer(frame, result) {
-  try { frame.contentWindow.postMessage(result.visualizer_payload, '*'); } catch {}
-}
-
-function coordLine(label, value) {
-  return `<div class="coord-line"><span>${escapeHtml(label)}</span><strong>${Number(value).toFixed(6)}</strong></div>`;
-}
-
-function formatCoord(value) {
-  const num = Number(value);
-  return Number.isFinite(num) ? num.toFixed(3) : '0.000';
-}
-
-function escapeHtml(value) {
-  return String(value ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#039;');
-}
-
-render();
+export const appInternals = { CARD_BANK };
