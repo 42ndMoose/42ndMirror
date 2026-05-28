@@ -8,16 +8,34 @@ The app asks structured scenario cards, applies deterministic scoring, and outpu
 |x| + |y| + |z| = 1
 ```
 
-## What changed in v0.3
+## v0.4 focus
 
-- Landing copy is shorter and more casual.
-- The scope label appears in quotes during cards, result, and saved entries.
-- Recent entries appear at the bottom of the landing page.
-- Entries can be removed with a confirmation dialog.
-- ADHD mode changes the whole UI copy and sizing, not only card text.
-- Public/group/debate settings add pressure-aware cards.
-- Card answers are less dimension-obvious and more cross-loaded.
-- The scoring now watches for score-as-proof pressure, retake pressure, over-smooth answer patterns, and public comparison pressure.
+v0.4 adds a deterministic card router. The free-text label is still not parsed by an LLM, but the app now uses a transparent keyword/facet classifier to seed a route vector. Each next card is selected by a visible scoring formula:
+
+```txt
+S = .54R + .22D + .12G + .08T + setting + fixed - penalty
+```
+
+Where:
+
+```txt
+R = route fit
+D = dimension deficit fit
+G = gate deficit fit
+T = stage fit
+```
+
+This lets the card sequence get more specific to small life choices, evidence claims, public comparison pressure, character reads, policy/system questions, and comparisons.
+
+## Example behavior
+
+A label like:
+
+```txt
+should i stop procrastinating and eat now
+```
+
+should route toward small-action/body-need cards rather than abstract debate cards.
 
 ## Files
 
@@ -48,8 +66,10 @@ http://localhost:8080
 ## Smoke test
 
 ```bash
-node test-smoke.mjs
+npm test
 ```
+
+The test checks the surface equation, routing relevance, and several stress labels.
 
 ## Axis convention
 
@@ -60,16 +80,6 @@ node test-smoke.mjs
 -y = negative epistemic stability
 +z = wisdom
 -z = knowledge
-```
-
-## Design note
-
-The free-text label is treated as the name of the run. The coordinate comes from the card choices.
-
-The result is best read as:
-
-```txt
-Given this selected scope and these structured answers, this is the reasoning-shape expressed by the run.
 ```
 
 ## GitHub Pages
