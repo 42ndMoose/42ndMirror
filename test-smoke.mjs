@@ -1,4 +1,4 @@
-import { BASE_CARDS, FOLLOW_UP_CARDS, MODES, SCOPES } from './data/cards.js';
+import { BASE_CARDS, FOLLOW_UP_CARDS, MODES, SCOPES, USE_CASES } from './data/cards.js';
 import {
   answerCard,
   calculateResult,
@@ -18,20 +18,23 @@ function checkSurface(point, label) {
 
 for (const modeId of Object.keys(MODES)) {
   for (const scope of SCOPES.map(s => s.id)) {
-    const state = makeInitialState({ modeId, scope, claim: 'smoke test' });
-    let guard = 0;
-    while (true) {
-      const card = getNextCard(state);
-      if (!card) break;
-      const answer = card.answers[0];
-      answerCard(state, card, answer);
-      guard += 1;
-      assert(guard < 40, `too many cards for ${modeId}/${scope}`);
+    for (const useCase of USE_CASES.map(s => s.id)) {
+      const state = makeInitialState({ modeId, scope, useCase, claim: 'smoke test' });
+      let guard = 0;
+      while (true) {
+        const card = getNextCard(state);
+        if (!card) break;
+        const answer = card.answers[0];
+        answerCard(state, card, answer);
+        guard += 1;
+        assert(guard < 50, `too many cards for ${modeId}/${scope}/${useCase}`);
+      }
+      const result = calculateResult(state);
+      checkSurface(result.coordinates, `${modeId}/${scope}/${useCase}`);
+      assert(result.coordinates.surface_check === 1, `${modeId}/${scope}/${useCase}: rounded surface check failed`);
+      assert(result.visualizer_payload?.data?.data?.point, `${modeId}/${scope}/${useCase}: missing visualizer payload`);
+      assert(result.quoted_label === 'smoke test', `${modeId}/${scope}/${useCase}: quoted label missing`);
     }
-    const result = calculateResult(state);
-    checkSurface(result.coordinates, `${modeId}/${scope}`);
-    assert(result.coordinates.surface_check === 1, `${modeId}/${scope}: rounded surface check failed`);
-    assert(result.visualizer_payload?.data?.data?.point, `${modeId}/${scope}: missing visualizer payload`);
   }
 }
 

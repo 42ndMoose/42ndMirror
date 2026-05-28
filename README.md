@@ -1,74 +1,77 @@
 # 42ndMirror
 
-42ndMirror is a static, deterministic reasoning-shape validator for the Epistemic Octahedron.
+A static GitHub Pages-ready card test for plotting a selected scope onto the Epistemic Octahedron.
 
-It does not use an LLM, backend, model weights, or server scoring. The app asks structured contrast cards, applies deterministic scoring, and outputs an `x,y,z` coordinate that strictly satisfies:
+The app asks structured scenario cards, applies deterministic scoring, and outputs an `x,y,z` coordinate that strictly satisfies:
 
 ```txt
 |x| + |y| + |z| = 1
 ```
 
-## Current scope
+## What changed in v0.3
 
-This version focuses only on the test/input engine and projection output. Diachronic mechanisms are intentionally not implemented yet.
+- Landing copy is shorter and more casual.
+- The scope label appears in quotes during cards, result, and saved entries.
+- Recent entries appear at the bottom of the landing page.
+- Entries can be removed with a confirmation dialog.
+- ADHD mode changes the whole UI copy and sizing, not only card text.
+- Public/group/debate settings add pressure-aware cards.
+- Card answers are less dimension-obvious and more cross-loaded.
+- The scoring now watches for score-as-proof pressure, retake pressure, over-smooth answer patterns, and public comparison pressure.
 
-Included:
-
-- Fast mode
-- ADHD mode, same scoring as Fast mode with simpler wording
-- Serious mode
-- Scope selector
-- Balanced contrast cards
-- Adaptive follow-up cards
-- Signal-quality checks for sandbox, taste, speed, narrow samples, scope confusion, and closure pressure
-- Deterministic coordinate output
-- Embedded projection into the uploaded Epistemic Octahedron HTML visualizer
-
-## Axis convention
-
-This repo follows the uploaded visualizer convention:
+## Files
 
 ```txt
-+x = Empathy
--x = Practicality
-+y = positive epistemic stability
--y = negative epistemic stability
-+z = Wisdom
--z = Knowledge
+index.html
+styles.css
+visualizer.html
+src/app.js
+src/engine.js
+data/cards.js
+test-smoke.mjs
 ```
-
-## Design rule
-
-The app does not interpret the user's free text. The one-sentence label is only a label. The score comes from structured choices.
-
-That keeps the system auditable and GitHub Pages-safe.
 
 ## Run locally
 
-Any static server works:
+Open `index.html` directly, or run a static server:
 
 ```bash
-python3 -m http.server
+python3 -m http.server 8080
 ```
 
 Then open:
 
 ```txt
-http://localhost:8000
+http://localhost:8080
+```
+
+## Smoke test
+
+```bash
+node test-smoke.mjs
+```
+
+## Axis convention
+
+```txt
++x = empathy
+-x = practicality
++y = positive epistemic stability
+-y = negative epistemic stability
++z = wisdom
+-z = knowledge
+```
+
+## Design note
+
+The free-text label is treated as the name of the run. The coordinate comes from the card choices.
+
+The result is best read as:
+
+```txt
+Given this selected scope and these structured answers, this is the reasoning-shape expressed by the run.
 ```
 
 ## GitHub Pages
 
-Push the repo contents to a GitHub repository and enable GitHub Pages from the root or `/docs`, depending on your chosen layout.
-
-## Test
-
-```bash
-npm test
-```
-
-The smoke test checks that the engine always returns a surface-valid coordinate.
-
-## Important limitation
-
-This is a validator for a selected scope, not a certification of a person. A character, argument, public figure, or claim can be plotted, but the output should be read according to the breadth and quality of the evidence supplied by the structured answers.
+Upload the folder to a repository named `42ndMirror`, enable GitHub Pages from the main branch, and point Pages at the repository root.
